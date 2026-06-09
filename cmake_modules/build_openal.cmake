@@ -19,6 +19,19 @@ else()
 endif()
 set(OPENAL_VERSION_STRING 1.23.1)
 
+if(TARGET_LINUX_GLES)
+    set(OPENAL_EXTRA_CMAKE_ARGS
+        -DALSOFT_BACKEND_PIPEWIRE=OFF
+        -DALSOFT_BACKEND_PULSEAUDIO=OFF
+        -DALSOFT_BACKEND_ALSA=ON
+        -DALSOFT_BACKEND_OSS=OFF
+        -DALSOFT_BACKEND_SNDIO=OFF
+        "-DCMAKE_CXX_FLAGS=-include cstdint"
+    )
+else()
+    set(OPENAL_EXTRA_CMAKE_ARGS)
+endif()
+
 ExternalProject_Add(
     OPENAL
     SOURCE_DIR          ${CMAKE_SOURCE_DIR}/lib/openal
@@ -42,6 +55,7 @@ ExternalProject_Add(
                         -DALSOFT_STATIC_LIBGCC:BOOL=${ALSOFT_STATIC_LIBGCC}
                         -DALSOFT_STATIC_STDCXX:BOOL=${ALSOFT_STATIC_STDCXX}
                         -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+                        ${OPENAL_EXTRA_CMAKE_ARGS}
     CMAKE_CACHE_ARGS    -DEXTRA_LIBS:STRINGS=${EXTRA_LIBS}
     BUILD_BYPRODUCTS    ${OPENAL_LIBRARY}
 )

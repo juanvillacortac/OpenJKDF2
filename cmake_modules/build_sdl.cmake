@@ -1,6 +1,6 @@
 set(SDL_ROOT ${CMAKE_BINARY_DIR}/SDL)
 
-if(TARGET_ANDROID)
+if(TARGET_ANDROID OR TARGET_LINUX_GLES)
 set(SDL_HIDAPI TRUE)
 set(SDL_STATIC FALSE)
 set(SDL_SHARED TRUE)
@@ -30,29 +30,72 @@ message(SDL_VERSION_MAJOR\ ==\ ${SDL_VERSION_MAJOR})
 message(SDL_VERSION_MINOR\ ==\ ${SDL_VERSION_MINOR})
 message(SDL_VERSION_PATCH\ ==\ ${SDL_VERSION_PATCH})
 
+if(TARGET_LINUX_GLES)
+    set(SDL_EXTRA_CMAKE_ARGS
+        -DSDL_X11=OFF
+        -DSDL_WAYLAND=OFF
+        -DSDL_KMSDRM=ON
+        -DSDL_OPENGLES=ON
+        -DSDL_VIDEO_OPENGL=OFF
+        -DSDL_PULSEAUDIO=OFF
+        -DSDL_PIPEWIRE=OFF
+        -DSDL_JACK=OFF
+        -DSDL_SNDIO=OFF
+        -DSDL_LIBSAMPLERATE=OFF
+        -DSDL_ALSA=ON
+        -DSDL_ALSA_SHARED=ON
+        -DSDL_LIBUDEV=ON
+    )
+else()
+    set(SDL_EXTRA_CMAKE_ARGS)
+endif()
+
+if(TARGET_LINUX_GLES)
+    set(SDL_EP_CACHE_ARGS
+        CMAKE_ARGS          --toolchain ${CMAKE_TOOLCHAIN_FILE}
+                            --install-prefix ${SDL_ROOT}
+                            -DCMAKE_INSTALL_LIBDIR=lib
+                            -DCMAKE_BUILD_TYPE:STRING=Release
+                            -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}
+                            -DSDL_SHARED:BOOL=${SDL_SHARED}
+                            -DSDL_STATIC:BOOL=${SDL_STATIC}
+                            -DSDL_TEST:BOOL=FALSE
+                            -DSDL_HIDAPI:BOOL=${SDL_HIDAPI}
+                            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+                            -DCMAKE_INSTALL_LIBDIR=lib
+                            ${SDL_EXTRA_CMAKE_ARGS}
+        CMAKE_CACHE_ARGS    -DSDL_LIBSAMPLERATE:BOOL=OFF
+                            -DSDL_LIBSAMPLERATE_SHARED:BOOL=OFF
+    )
+else()
+    set(SDL_EP_CACHE_ARGS
+        CMAKE_ARGS          --toolchain ${CMAKE_TOOLCHAIN_FILE}
+                            --install-prefix ${SDL_ROOT}
+                            -DCMAKE_INSTALL_LIBDIR=lib
+                            -DCMAKE_BUILD_TYPE:STRING=Release
+                            -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}
+                            -DSDL_SHARED:BOOL=${SDL_SHARED}
+                            -DSDL_STATIC:BOOL=${SDL_STATIC}
+                            -DSDL_TEST:BOOL=FALSE
+                            -DSDL_HIDAPI:BOOL=${SDL_HIDAPI}
+                            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+                            -DCMAKE_INSTALL_LIBDIR=lib
+    )
+endif()
+
 ExternalProject_Add(
     SDL
     SOURCE_DIR          ${CMAKE_SOURCE_DIR}/lib/SDL
     BINARY_DIR          ${SDL_ROOT}
     INSTALL_DIR         ${SDL_ROOT}
     UPDATE_DISCONNECTED TRUE
-    CMAKE_ARGS          --toolchain ${CMAKE_TOOLCHAIN_FILE}
-                        --install-prefix ${SDL_ROOT}
-                        -DCMAKE_INSTALL_LIBDIR=lib
-                        -DCMAKE_BUILD_TYPE:STRING=Release
-                        -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}
-                        -DSDL_SHARED:BOOL=${SDL_SHARED}
-                        -DSDL_STATIC:BOOL=${SDL_STATIC}
-                        -DSDL_TEST:BOOL=FALSE
-                        -DSDL_HIDAPI:BOOL=${SDL_HIDAPI}
-                        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-                        -DCMAKE_INSTALL_LIBDIR=lib
+    ${SDL_EP_CACHE_ARGS}
     BUILD_BYPRODUCTS    ${SDL_LIBRARIES}
 )
 
 # *Replicate* SDL target
 if(NOT TARGET SDL::SDL)
-    if(TARGET_ANDROID)
+    if(TARGET_ANDROID OR TARGET_LINUX_GLES)
         add_library(SDL::SDL SHARED IMPORTED)
     else()
         add_library(SDL::SDL STATIC IMPORTED)

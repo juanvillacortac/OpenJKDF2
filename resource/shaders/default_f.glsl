@@ -264,7 +264,12 @@ void main(void)
     vec4 sampledEmiss = texture(texEmiss, adj_texcoords);
     vec4 sampled_color = vec4(1.0, 1.0, 1.0, 1.0);
     vec4 vertex_color = f_color;
+#ifdef GL_ES
+    /* mediump can corrupt palette indices; snap to the nearest texel index */
+    float index = floor(sampled.r * 255.0 + 0.5) / 255.0;
+#else
     float index = sampled.r;
+#endif
     vec4 palval = texture(worldPalette, vec2(index, 0.5));
     vec4 color_add = vec4(0.0, 0.0, 0.0, 1.0);
     vec4 color_add_emiss = vec4(0.0, 0.0, 0.0, 0.0);

@@ -6,6 +6,9 @@
 #include "General/stdConffile.h"
 #include "stdPlatform.h"
 #include "jk.h"
+#if defined(TARGET_LINUX_GLES)
+#include "Platform/trace_gles.h"
+#endif
 
 static stdHashTable* sithModel_hashtable;
 
@@ -94,12 +97,21 @@ rdModel3* sithModel_LoadEntry(const char *model_3do_fname, int unk)
     model = &sithWorld_pLoading->models[sithWorld_pLoading->numModelsLoaded];
 
     _sprintf(model_fpath, "%s%c%s", "3do", '\\', model_3do_fname);
+#if defined(TARGET_LINUX_GLES)
+    openjkdf2_trace_fmt("sithModel_LoadEntry: %s", model_3do_fname);
+#endif
     if ( !rdModel3_Load(model_fpath, model) )
     {
+#if defined(TARGET_LINUX_GLES)
+        openjkdf2_trace_fmt("sithModel_LoadEntry: failed %s", model_3do_fname);
+#endif
         if ( !unk )
             return sithModel_LoadEntry("dflt.3do", 1);
         return 0;
     }
+#if defined(TARGET_LINUX_GLES)
+    openjkdf2_trace_fmt("sithModel_LoadEntry: ok %s", model_3do_fname);
+#endif
     
     model->id = sithWorld_pLoading->numModelsLoaded;
     if (sithWorld_pLoading->level_type_maybe & 1)

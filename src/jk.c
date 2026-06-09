@@ -314,6 +314,7 @@ int _memcmp (const void* str1, const void* str2, size_t count)
   return 0;
 }
 
+__attribute__((noinline))
 int _strlen(const char *str)
 {
     int len;
@@ -739,8 +740,17 @@ void _free(void* a)
 wchar_t* _wcsncpy(wchar_t *s1, const wchar_t *s2, size_t n)
 {
     wchar_t *ret = s1;
-    for ( ; n; n--) if (!(*s1++ = *s2++)) break;
-    for ( ; n; n--) *s1++ = 0;
+    size_t i;
+
+    if ( !n )
+        return ret;
+
+    for ( i = 0; i < n && s2[i]; i++ )
+        s1[i] = s2[i];
+
+    if ( i < n )
+        s1[i] = 0;
+
     return ret;
 }
 
@@ -786,6 +796,7 @@ const char* _strpbrk(const char* a, const char* b)
     return strpbrk(a,b);
 }
 
+__attribute__((noinline))
 size_t _wcslen(const wchar_t * str)
 {
     int len;
@@ -1116,21 +1127,25 @@ int _iswspace(int a)
     return isspace(c);
 }
 
+__attribute__((noinline))
 size_t __wcslen(const wchar_t * strarg)
 {
-    if(!strarg)
-     return -1; //strarg is NULL pointer
-   const wchar_t* str = strarg;
-   for(;*str;++str)
-     ; // empty body
-   return str-strarg;
+    const wchar_t* str;
+    if ( !strarg )
+        return (size_t)-1;
+    str = strarg;
+    while ( *str )
+        ++str;
+    return (size_t)(str - strarg);
 }
 
 wchar_t* __wcscat(wchar_t * a, const wchar_t * b)
 {
     wchar_t* ret = a;
-    a += __wcslen(a);
-    memmove(a, b, __wcslen(b) * sizeof(wchar_t));
+    size_t la = __wcslen(a);
+    size_t lb = __wcslen(b);
+    memmove(a + la, b, lb * sizeof(wchar_t));
+    a[la + lb] = 0;
     return ret;
 }
 
@@ -1147,14 +1162,7 @@ wchar_t* __wcschr(const wchar_t * s, wchar_t c)
 
 wchar_t* __wcsncpy(wchar_t * a, const wchar_t * b, size_t c)
 {
-    wchar_t* ret = a;
-    size_t len = __wcslen(b) * sizeof(wchar_t);
-    if (len > c*sizeof(wchar_t)) {
-        len = c*sizeof(wchar_t);
-    }
-    memmove(a, b, len);
-    a[len] = 0;
-    return &a[len];
+    return _wcsncpy(a, b, c);
 }
 
 wchar_t* __wcsrchr(const wchar_t * s, wchar_t c)

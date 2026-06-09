@@ -1,6 +1,7 @@
 #include "jkMain.h"
 
 #include "../jk.h"
+#include "Platform/trace_gles.h"
 #include "Engine/rdroid.h"
 #include "Main/sithMain.h"
 #include "Devices/sithControl.h"
@@ -306,8 +307,10 @@ void jkMain_GuiAdvance()
         v7 = jkMain_aGuiStateFuncs[jkSmack_nextGuiState].showFunc;
         if ( !v7 )
             goto LABEL_35;
+        openjkdf2_trace("jkMain_GuiAdvance: showFunc");
         //jk_printf("show %u\n", jkSmack_currentGuiState);
         v7(jkSmack_nextGuiState, v4);
+        openjkdf2_trace("jkMain_GuiAdvance: showFunc done");
         //jk_printf("showed %u\n", jkSmack_currentGuiState);
     }
 LABEL_35:
@@ -807,9 +810,14 @@ void jkMain_GameplayLeave(int a2, int a3)
 
 void jkMain_TitleShow(int a1, int a2)
 {
+    openjkdf2_trace("jkMain_TitleShow: enter");
     jkGuiTitle_ShowLoadingStatic();
+    openjkdf2_trace("jkMain_TitleShow: after ShowLoadingStatic");
+    openjkdf2_trace("jkMain_TitleShow: before sithMain_Load");
     sithMain_Load("static.jkl");
+    openjkdf2_trace("jkMain_TitleShow: after sithMain_Load");
     jkHudInv_InitItems(); // MOTS inlined?
+    openjkdf2_trace("jkMain_TitleShow: done");
 }
 
 void jkMain_TitleTick(int a1)
@@ -1331,6 +1339,8 @@ void jkMain_VideoShow(int a1, int a2)
 {
     signed int result; // eax
 
+    openjkdf2_trace("jkMain_VideoShow: enter");
+
     // Added: Fix a bug with the door on Level 10?
     //if (Main_bMotsCompat && !sithNet_isMulti )
     //    sithTime_Pause();
@@ -1536,6 +1546,11 @@ void jkMain_FixRes()
     uint32_t newW = Window_xSize;
     uint32_t newH = Window_ySize;
 
+#if defined(TARGET_LINUX_GLES)
+    /* Menu/HUD buffer stays 640x480; std3D scales to the window. */
+    newW = 640;
+    newH = 480;
+#else
     //if (jkGame_isDDraw)
     {
         newW = (uint32_t)((flex_t)Window_xSize * ((480.0*2.0)/Window_ySize));
@@ -1558,6 +1573,7 @@ void jkMain_FixRes()
     Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].yMin = 0;
     Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].xMax = newW / 2;
     Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].yMax = newH / 2;
+#endif
     
     stdDisplay_pCurVideoMode->format.width = newW;
     stdDisplay_pCurVideoMode->format.height = newH;
@@ -1565,13 +1581,9 @@ void jkMain_FixRes()
     stdDisplay_pCurVideoMode->format.width_in_pixels = newW;
     stdDisplay_pCurVideoMode->format.width_in_bytes = newW;
     
-    Video_menuBuffer.format.width_in_pixels = newW;
     Video_otherBuf.format.width_in_pixels = newW;
-    Video_menuBuffer.format.width_in_bytes = newW;
     Video_otherBuf.format.width_in_bytes = newW;
-    Video_menuBuffer.format.width = newW;
     Video_otherBuf.format.width = newW;
-    Video_menuBuffer.format.height = newH;
     Video_otherBuf.format.height = newH;
     
     _memcpy(&Video_format, &stdDisplay_pCurVideoMode->format, sizeof(stdVBufferTexFmt));
@@ -1595,6 +1607,9 @@ void jkMain_FixRes()
 #endif
 
     jkHudInv_LoadItemRes();
+#if defined(TARGET_LINUX_GLES)
+    jkPlayer_ApplyGlesHandheldDefaults();
+#endif
     jkHud_Open();
     if (Main_bMotsCompat) {
         jkHudScope_Open();
@@ -1617,6 +1632,12 @@ int jkMain_SetVideoMode()
     wchar_t *v3; // [esp-4h] [ebp-10h]
     wchar_t *v4; // [esp-4h] [ebp-10h]
 
+#if defined(TARGET_LINUX_GLES)
+    if (jkGame_isDDraw) {
+        jkPlayer_ApplyGlesHandheldDefaults();
+        return 0;
+    }
+#endif
     if ( jkGame_isDDraw )
         return 0;
     
@@ -1666,13 +1687,9 @@ int jkMain_SetVideoMode()
     stdDisplay_pCurVideoMode->format.width_in_pixels = newW;
     stdDisplay_pCurVideoMode->format.width_in_bytes = newW;
     
-    Video_menuBuffer.format.width_in_pixels = newW;
     Video_otherBuf.format.width_in_pixels = newW;
-    Video_menuBuffer.format.width_in_bytes = newW;
     Video_otherBuf.format.width_in_bytes = newW;
-    Video_menuBuffer.format.width = newW;
     Video_otherBuf.format.width = newW;
-    Video_menuBuffer.format.height = newH;
     Video_otherBuf.format.height = newH;
     
     _memcpy(&Video_format, &stdDisplay_pCurVideoMode->format, sizeof(stdVBufferTexFmt));
@@ -1693,6 +1710,9 @@ int jkMain_SetVideoMode()
         jkHudScope_Close();
         jkHudCameraView_Close();
     }
+#if defined(TARGET_LINUX_GLES)
+    jkPlayer_ApplyGlesHandheldDefaults();
+#endif
     jkHud_Open();
     if (Main_bMotsCompat) {
         jkHudScope_Open();

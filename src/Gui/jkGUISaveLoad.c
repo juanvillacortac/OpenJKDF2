@@ -19,9 +19,52 @@
 #include "Cog/jkCog.h"
 #include "stdPlatform.h"
 
+#include <time.h>
+
 #include "jk.h"
 
 static int32_t jkGuiSaveLoad_listIdk[2] = {0xd, 0xe};
+
+static void jkGuiSaveLoad_EnsureDefaultSaveName(void)
+{
+    wchar_t *levelName;
+    wchar_t *fallbackName;
+    wchar_t *baseName;
+    time_t now;
+    struct tm *tm_info;
+
+    if (_wcslen(jkGuiSaveLoad_word_559830))
+        return;
+
+    if (!sithWorld_pCurrentWorld)
+        return;
+
+    baseName = NULL;
+    levelName = jkGuiTitle_quicksave_related_func1(&jkCog_strings, sithWorld_pCurrentWorld->map_jkl_fname);
+    if (levelName && levelName[0]) {
+        baseName = levelName;
+    } else {
+        fallbackName = jkStrings_GetUniStringWithFallback("GUI_SAVE");
+        if (fallbackName && fallbackName[0])
+            baseName = fallbackName;
+    }
+
+    if (!baseName)
+        return;
+
+    now = time(NULL);
+    tm_info = localtime(&now);
+    if (!tm_info)
+        return;
+
+    jk_snwprintf(jkGuiSaveLoad_word_559830, 0x100u, L"%s %02d/%02d %02d:%02d:%02d",
+        baseName,
+        tm_info->tm_mday,
+        tm_info->tm_mon + 1,
+        tm_info->tm_hour,
+        tm_info->tm_min,
+        tm_info->tm_sec);
+}
 
 static jkGuiElement jkGuiSaveLoad_aElements[15] = {
     {ELEMENT_TEXT, 0, 5, 0, 3, {0x32, 0x32, 0x1F4, 0x1E}, 1, 0, 0, 0, 0, 0, {0}, 0},
@@ -313,10 +356,23 @@ int jkGuiSaveLoad_Show(int bIsSave)
     jkGuiSaveLoad_aElements[0].wstr = jkStrings_GetUniString(v1);
     jkGuiRend_MenuSetReturnKeyShortcutElement(&jkGuiSaveLoad_menu, &jkGuiSaveLoad_aElements[11]);
     jkGuiRend_MenuSetEscapeKeyShortcutElement(&jkGuiSaveLoad_menu, &jkGuiSaveLoad_aElements[12]);
-    jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[2];
     jkGuiSaveLoad_PopulateInfo(0);
     _wcsncpy(jkGuiSaveLoad_word_559830, &jkGuiSaveLoad_word_559C54[8], 0xFFu);
     jkGuiSaveLoad_word_559830[255] = 0;
+    if (bIsSave) {
+        jkGuiSaveLoad_EnsureDefaultSaveName();
+#if defined(TARGET_LINUX_GLES)
+        /* Handhelds cannot type in the name field; start on OK or the save list. */
+        if (jkGuiSaveLoad_numEntries > 0)
+            jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[4];
+        else
+            jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[11];
+#else
+        jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[2];
+#endif
+    } else {
+        jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[2];
+    }
     while ( 1 )
     {
         while ( 1 )

@@ -22,6 +22,7 @@
 #include "Main/jkStrings.h"
 #include "Cog/jkCog.h"
 #include "General/stdMath.h"
+#include "Platform/trace_gles.h"
 
 #ifdef TARGET_TWL
 #include <nds.h>
@@ -97,6 +98,8 @@ const char* jkGui_aFonts[JKGUI_NUM_FONTS] = {
 };
 
 static int jkGui_bInitialized;
+/* Set after stdShutdown invalidates menu string allocs (in-game MOTS/DF2 restart). */
+static int jkGui_bMenuStringsStale;
 
 void jkGui_InitMenu(jkGuiMenu *menu, stdBitmap *bgBitmap)
 {
@@ -118,10 +121,12 @@ void jkGui_InitMenu(jkGuiMenu *menu, stdBitmap *bgBitmap)
     {
 #ifdef QOL_IMPROVEMENTS
         if (iter->wHintTextAlloced) {
-            std_pHS->free((void*)iter->wHintTextAlloced);
+            if (!jkGui_bMenuStringsStale)
+                std_pHS->free((void*)iter->wHintTextAlloced);
         }
         if (iter->strAlloced) {
-            std_pHS->free((void*)iter->strAlloced);
+            if (!jkGui_bMenuStringsStale)
+                std_pHS->free((void*)iter->strAlloced);
         }
         iter->hintText = iter->origHintText;
         iter->str = iter->origStr;
@@ -263,6 +268,11 @@ int jkGui_Startup()
     stdString_CharToWchar(jkPlayer_playerShortName, playerShortName, 31);
     jkPlayer_playerShortName[31] = 0;
 
+#if defined(TARGET_LINUX_GLES)
+    if (!jkPlayer_ReadConf(jkPlayer_playerShortName))
+        jkPlayer_ApplyGlesHandheldDefaults();
+#endif
+
     for (int i = 0; i < JKGUI_NUM_FONTS; i++)
     {
         // TODO: Eviction caching for stdBitmap, rdMaterial
@@ -350,6 +360,7 @@ int jkGui_Startup()
     Window_ShowCursorUnwindowed(Main_bWindowGUI == 0);
     stdBitmap_EnsureData(jkGui_stdBitmaps[JKGUI_BM_BK_MAIN]); // Added
     jkGuiRend_SetPalette((uint8_t*)jkGui_stdBitmaps[JKGUI_BM_BK_MAIN]->palette);
+    jkGui_bMenuStringsStale = 0;
     jkGui_bInitialized = 1;
     return 1;
 }
@@ -392,6 +403,7 @@ void jkGui_Shutdown()
 #ifndef SDL2_RENDER
     stdDisplay_422A50();
 #endif
+    jkGui_bMenuStringsStale = 1;
     jkGui_bInitialized = 0;
 }
 
@@ -457,9 +469,12 @@ int jkGui_SetModeMenu(const void *palette)
         Window_ShowCursorUnwindowed(1);
 
     v4 = stdDisplay_FindClosestMode(&mode, Video_renderSurface, stdDisplay_numVideoModes);
+    openjkdf2_trace("jkGui_SetModeMenu: before SetMode");
     if ( !v3 && stdDisplay_bModeSet && v4 == Video_curMode && stdDisplay_bPaged == 1 || stdDisplay_SetMode(v4, palette, 1) )
     {
+        openjkdf2_trace("jkGui_SetModeMenu: after SetMode");
         jkGuiRend_Open(&Video_menuBuffer, &Video_otherBuf, 0);
+        openjkdf2_trace("jkGui_SetModeMenu: after Rend_Open");
         jkGui_GdiMode = 1;
         return 1;
     }

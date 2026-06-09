@@ -364,10 +364,16 @@ sithThing* sithThing_GetParent(sithThing* pThing)
 {
     sithThing *result; // eax
     sithThing *i; // ecx
+    int guard;
+
+    if ( !pThing || !sithThing_GetIdxFromThing(pThing) || pThing->type == SITH_THING_FREE )
+        return pThing;
 
     result = pThing;
-    for ( i = pThing->prev_thing; i; i = i->prev_thing )
+    for ( i = pThing->prev_thing, guard = 0; i && guard < 32; i = i->prev_thing, ++guard )
     {
+        if ( !sithThing_GetIdxFromThing(i) || i->type == SITH_THING_FREE )
+            break;
         if ( result->child_signature != i->signature )
             break;
         result = i;

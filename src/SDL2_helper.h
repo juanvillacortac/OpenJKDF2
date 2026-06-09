@@ -60,6 +60,23 @@ extern "C" {
 #define GL_BGR 0x80E0
 #endif
 
+#elif defined(TARGET_LINUX_GLES)
+#include <SDL.h>
+#include <SDL_opengles2.h>
+#include <GLES3/gl3.h>
+#include <GLES3/gl3ext.h>
+#include "Platform/Posix/gles_loader.h"
+#define GL_UNSIGNED_SHORT_5_6_5_REV       0x8364
+#define GL_UNSIGNED_SHORT_1_5_5_5_REV     0x8366
+
+#ifndef GL_BGRA
+#define GL_BGRA 0x80E1
+#endif
+
+#ifndef GL_BGR
+#define GL_BGR 0x80E0
+#endif
+
 #else
 #include <GL/glew.h>
 #include <SDL.h>

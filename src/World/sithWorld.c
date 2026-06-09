@@ -28,6 +28,9 @@
 #include "General/util.h"
 #include "Gameplay/sithPlayer.h"
 #include "Platform/std3D.h"
+#if defined(TARGET_LINUX_GLES)
+#include "Platform/trace_gles.h"
+#endif
 #include "jk.h"
 
 #ifdef TARGET_TWL
@@ -186,6 +189,9 @@ LABEL_11:
                 if ( v3 != -1 )
                 {
                     startMsecs = stdPlatform_GetTimeMsec();
+#if defined(TARGET_LINUX_GLES)
+                    openjkdf2_trace_fmt("sithWorld_Load: section %s", section);
+#endif
                     if ( !sithWorld_aSectionParsers[v3].funcptr(pWorld, 0) ) {
                         // Added
                         _sprintf(tmp, "%f seconds to parse section %s -- FAILED!\n", (flex32_t)v6 * 0.001, section);

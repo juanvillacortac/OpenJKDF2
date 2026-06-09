@@ -100,7 +100,9 @@ void jkHudInv_ClearRects()
     {
         if ( Video_pCanvas->heightMinusOne < jkHudInv_info.field_3C )
         {
+#if !defined(TARGET_LINUX_GLES)
             stdDisplay_VBufferFill(Video_pMenuBuffer, Video_fillColor, &jkHudInv_info.drawRect);
+#endif
             --jkHudInv_info.field_28;
         }
     }
@@ -917,15 +919,21 @@ void jkHudInv_LoadItemRes()
     stdBitmap_ConvertColorFormat(&Video_format.format, jkHudInv_font->pBitmap);
 #endif
     v6 = Video_format.width;
-    _memset(&jkHudInv_info, 0, sizeof(jkHudInvInfo));
     v7 = Video_format.height;
+#if defined(TARGET_LINUX_GLES)
+    if (Video_pMenuBuffer && Video_pMenuBuffer->format.width > 0) {
+        v6 = Video_pMenuBuffer->format.width;
+        v7 = Video_pMenuBuffer->format.height;
+    }
+#endif
+    _memset(&jkHudInv_info, 0, sizeof(jkHudInvInfo));
     _memset(&jkHudInv_scroll, 0, sizeof(jkHudInvScroll));
-    v8 = Video_format.height - HUD_SCALED(36);
-    jkHudInv_info.field_0 = (Video_format.width - HUD_SCALED(24)) >> 1;
+    v8 = v7 - HUD_SCALED(36);
+    jkHudInv_info.field_0 = (v6 - HUD_SCALED(24)) >> 1;
     jkHudInv_info.drawRect.x = jkHudInv_info.field_0 - HUD_SCALED(64);
     v9 = HUD_SCALED(24);
-    jkHudInv_info.field_4 = Video_format.height - HUD_SCALED(36);
-    jkHudInv_info.drawRect.y = Video_format.height - HUD_SCALED(36);
+    jkHudInv_info.field_4 = v7 - HUD_SCALED(36);
+    jkHudInv_info.drawRect.y = v7 - HUD_SCALED(36);
     jkHudInv_info.drawRect.width = HUD_SCALED(184);
     jkHudInv_info.drawRect.height = HUD_SCALED(24);
     if ( jkHudInv_aBitmaps[0] )

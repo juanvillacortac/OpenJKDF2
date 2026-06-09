@@ -21,12 +21,143 @@ uint8_t* stdDisplay_GetPalette()
 
 #else
 #include "SDL2_helper.h"
+#include "Platform/trace_gles.h"
 #include <assert.h>
+
+uint8_t* stdDisplay_VBufferPixels(stdVBuffer *vbuf)
+{
+    if (!vbuf) {
+        return NULL;
+    }
+    if (vbuf->sdlSurface) {
+        return (uint8_t*)vbuf->sdlSurface->pixels;
+    }
+    return (uint8_t*)vbuf->surface_lock_alloc;
+}
+
+#if defined(TARGET_LINUX_GLES)
+static void stdDisplay_Free8bppBuffer(stdVBuffer *vbuf)
+{
+    if (!vbuf) {
+        return;
+    }
+    if (vbuf->sdlSurface) {
+        SDL_FreeSurface(vbuf->sdlSurface);
+        vbuf->sdlSurface = NULL;
+    }
+    if (vbuf->surface_lock_alloc) {
+        std_pHS->free(vbuf->surface_lock_alloc);
+        vbuf->surface_lock_alloc = NULL;
+    }
+}
+
+static int stdDisplay_Alloc8bppBuffer(stdVBuffer *vbuf, uint32_t w, uint32_t h)
+{
+    uint32_t size;
+
+    if (!vbuf) {
+        return 0;
+    }
+
+    stdDisplay_Free8bppBuffer(vbuf);
+
+    size = w * h;
+    vbuf->surface_lock_alloc = (char*)std_pHS->alloc(size);
+    if (!vbuf->surface_lock_alloc) {
+        openjkdf2_trace("stdDisplay_Alloc8bppBuffer: alloc failed");
+        return 0;
+    }
+    memset(vbuf->surface_lock_alloc, 0, size);
+    vbuf->sdlSurface = NULL;
+    vbuf->format.width_in_bytes = w;
+    vbuf->format.width_in_pixels = w;
+    vbuf->format.width = w;
+    vbuf->format.height = h;
+    vbuf->format.format.bpp = 8;
+    vbuf->format.texture_size_in_bytes = size;
+    return 1;
+}
+#endif
 
 uint32_t Video_menuTexId = 0;
 uint32_t Video_overlayTexId = 0;
 rdColor24 stdDisplay_masterPalette[256];
 int Video_bModeSet = 0;
+
+#if defined(TARGET_LINUX_GLES)
+extern SDL_Window *displayWindow;
+extern SDL_GLContext glWindowContext;
+static int stdDisplay_menuTexturesValid = 0;
+
+static void stdDisplay_InvalidateMenuGLTextures(void)
+{
+    if (Video_menuTexId) {
+        glDeleteTextures(1, &Video_menuTexId);
+        Video_menuTexId = 0;
+    }
+    if (Video_overlayTexId) {
+        glDeleteTextures(1, &Video_overlayTexId);
+        Video_overlayTexId = 0;
+    }
+    stdDisplay_menuTexturesValid = 0;
+}
+
+int stdDisplay_EnsureMenuGLTextures(void)
+{
+    uint32_t newW;
+    uint32_t newH;
+    uint8_t *menuPixels;
+    uint8_t *overlayPixels;
+
+    if (stdDisplay_menuTexturesValid) {
+        return 1;
+    }
+    if (!displayWindow || !glWindowContext) {
+        openjkdf2_trace("stdDisplay_EnsureMenuGLTextures: no GL context");
+        return 0;
+    }
+
+    SDL_GL_MakeCurrent(displayWindow, glWindowContext);
+
+    newW = Video_menuBuffer.format.width;
+    newH = Video_menuBuffer.format.height;
+    menuPixels = stdDisplay_VBufferPixels(&Video_menuBuffer);
+    overlayPixels = stdDisplay_VBufferPixels(&Video_overlayMapBuffer);
+    if (!newW || !newH || !menuPixels || !overlayPixels) {
+        openjkdf2_trace("stdDisplay_EnsureMenuGLTextures: missing menu buffers");
+        return 0;
+    }
+
+    stdDisplay_InvalidateMenuGLTextures();
+
+    openjkdf2_trace("stdDisplay_EnsureMenuGLTextures: create textures");
+
+    glGenTextures(1, &Video_menuTexId);
+    glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, newW);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, newW, newH, 0, GL_RED, GL_UNSIGNED_BYTE, menuPixels);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
+    glGenTextures(1, &Video_overlayTexId);
+    glBindTexture(GL_TEXTURE_2D, Video_overlayTexId);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, newW);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, newW, newH, 0, GL_RED, GL_UNSIGNED_BYTE, overlayPixels);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
+    stdDisplay_menuTexturesValid = 1;
+    openjkdf2_trace("stdDisplay_EnsureMenuGLTextures: done");
+    return 1;
+}
+#else
+int stdDisplay_EnsureMenuGLTextures(void)
+{
+    return 1;
+}
+#endif
 
 int stdDisplay_Startup()
 {
@@ -62,25 +193,11 @@ int stdDisplay_FindClosestMode(render_pair *a1, struct stdVideoMode *render_surf
 
 int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
 {
-    uint32_t newW = Window_xSize;
-    uint32_t newH = Window_ySize;
+    // GUI layout is fixed at 640x480; scaling to window size happens in std3D_DrawMenu.
+    uint32_t newW = 640;
+    uint32_t newH = 480;
 
-    //if (jkGame_isDDraw)
-    {
-        newW = (uint32_t)((flex_t)Window_xSize * ((480.0*2.0)/Window_ySize));
-        newH = 480*2;
-    }
-
-    if (newW > Window_xSize)
-    {
-        newW = Window_xSize;
-        newH = Window_ySize;
-    }
-
-    if (newW < 640)
-        newW = 640;
-    if (newH < 480)
-        newH = 480;
+    openjkdf2_trace("stdDisplay_SetMode: enter");
 
     stdDisplay_pCurVideoMode = &Video_renderSurface[modeIdx];
     
@@ -97,6 +214,12 @@ int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
 
     if (Video_bModeSet)
     {
+#if defined(TARGET_LINUX_GLES)
+        stdDisplay_InvalidateMenuGLTextures();
+        stdDisplay_Free8bppBuffer(&Video_otherBuf);
+        stdDisplay_Free8bppBuffer(&Video_menuBuffer);
+        stdDisplay_Free8bppBuffer(&Video_overlayMapBuffer);
+#else
         glDeleteTextures(1, &Video_menuTexId);
         glDeleteTextures(1, &Video_overlayTexId);
         if (Video_otherBuf.sdlSurface)
@@ -109,8 +232,20 @@ int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
         Video_otherBuf.sdlSurface = 0;
         Video_menuBuffer.sdlSurface = 0;
         Video_overlayMapBuffer.sdlSurface = 0;
+#endif
     }
-    
+
+#if defined(TARGET_LINUX_GLES)
+    openjkdf2_trace("stdDisplay_SetMode: alloc 8bpp buffers");
+    if (!stdDisplay_Alloc8bppBuffer(&Video_otherBuf, newW, newH)
+        || !stdDisplay_Alloc8bppBuffer(&Video_menuBuffer, newW, newH)
+        || !stdDisplay_Alloc8bppBuffer(&Video_overlayMapBuffer, newW, newH))
+    {
+        openjkdf2_trace("stdDisplay_SetMode: 8bpp alloc failed");
+        return 0;
+    }
+    openjkdf2_trace("stdDisplay_SetMode: alloc ok");
+#else
     SDL_Surface* otherSurface = SDL_CreateRGBSurface(0, newW, newH, 8,
                                         0,
                                         0,
@@ -142,9 +277,6 @@ int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
         free(tmp);
     }
     
-    //SDL_SetSurfacePalette(otherSurface, palette);
-    //SDL_SetSurfacePalette(menuSurface, palette);
-    
     Video_otherBuf.sdlSurface = otherSurface;
     Video_menuBuffer.sdlSurface = menuSurface;
     Video_overlayMapBuffer.sdlSurface = overlaySurface;
@@ -152,10 +284,16 @@ int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
     Video_menuBuffer.format.width_in_bytes = menuSurface->pitch;
     Video_otherBuf.format.width_in_bytes = otherSurface->pitch;
     Video_overlayMapBuffer.format.width_in_bytes = overlaySurface->pitch;
+#endif
+
+    if (palette)
+    {
+        memcpy(stdDisplay_gammaPalette, palette, 0x300);
+    }
     
-    Video_menuBuffer.format.width_in_pixels = menuSurface->pitch;
-    Video_otherBuf.format.width_in_pixels = otherSurface->pitch;
-    Video_overlayMapBuffer.format.width_in_pixels = overlaySurface->pitch;
+    Video_menuBuffer.format.width_in_pixels = newW;
+    Video_otherBuf.format.width_in_pixels = newW;
+    Video_overlayMapBuffer.format.width_in_pixels = newW;
     Video_menuBuffer.format.width = newW;
     Video_otherBuf.format.width = newW;
     Video_overlayMapBuffer.format.width = newW;
@@ -166,25 +304,44 @@ int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
     Video_menuBuffer.format.format.bpp = 8;
     Video_otherBuf.format.format.bpp = 8;
     Video_overlayMapBuffer.format.format.bpp = 8;
-    
+
+#if !defined(TARGET_LINUX_GLES)
     glGenTextures(1, &Video_menuTexId);
     glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, newW);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, newW, newH, 0, GL_RED, GL_UNSIGNED_BYTE, stdDisplay_VBufferPixels(&Video_menuBuffer));
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, newW, newH, 0, GL_RED, GL_UNSIGNED_BYTE, Video_menuBuffer.sdlSurface->pixels);
     
     glGenTextures(1, &Video_overlayTexId);
     glBindTexture(GL_TEXTURE_2D, Video_overlayTexId);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, newW);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, newW, newH, 0, GL_RED, GL_UNSIGNED_BYTE, stdDisplay_VBufferPixels(&Video_overlayMapBuffer));
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, newW, newH, 0, GL_RED, GL_UNSIGNED_BYTE, Video_overlayMapBuffer.sdlSurface->pixels);
-    
+#endif
 
     Video_bModeSet = 1;
+    openjkdf2_trace("stdDisplay_SetMode: done");
     
     return 1;
+}
+
+void stdDisplay_SyncMenuBufferFormat(void)
+{
+#if defined(TARGET_LINUX_GLES)
+    /* Buffers 8bpp sin SDL_Surface; format ya viene de SetMode/Alloc8bppBuffer */
+    (void)0;
+#else
+    if (Video_menuBuffer.sdlSurface) {
+        Video_menuBuffer.format.width = Video_menuBuffer.sdlSurface->w;
+        Video_menuBuffer.format.height = Video_menuBuffer.sdlSurface->h;
+        Video_menuBuffer.format.width_in_pixels = Video_menuBuffer.sdlSurface->w;
+        Video_menuBuffer.format.width_in_bytes = Video_menuBuffer.sdlSurface->pitch;
+    }
+#endif
 }
 
 int stdDisplay_ClearRect(stdVBuffer *buf, int fillColor, rdRect *rect)
@@ -222,6 +379,17 @@ stdVBuffer* stdDisplay_VBufferNew(stdVBufferTexFmt *fmt, int create_ddraw_surfac
     _memset(out, 0, sizeof(*out));
     
     _memcpy(&out->format, fmt, sizeof(out->format));
+
+#if defined(TARGET_LINUX_GLES)
+    if (fmt->format.bpp == 8) {
+        if (!stdDisplay_Alloc8bppBuffer(out, fmt->width, fmt->height)) {
+            std_pHS->free(out);
+            openjkdf2_trace("stdDisplay_VBufferNew: 8bpp alloc failed");
+            return NULL;
+        }
+        return out;
+    }
+#endif
     
     // force 0 reads
     //out->format.width = 0;
@@ -262,9 +430,9 @@ stdVBuffer* stdDisplay_VBufferNew(stdVBufferTexFmt *fmt, int create_ddraw_surfac
     }
     else
     {
-        //printf("asdf\n");
         stdPlatform_Printf("Failed to allocate VBuffer! %s, w %u h %u bpp %u, rmask %x gmask %x bmask %x amask %x, %x %x %x, %x %x %x\n", SDL_GetError(), fmt->width, fmt->height, fmt->format.bpp, rbitmask, gbitmask, bbitmask, abitmask, fmt->format.r_bits, fmt->format.g_bits, fmt->format.b_bits, fmt->format.r_shift, fmt->format.g_shift, fmt->format.b_shift);
-        assert(0);
+        std_pHS->free(out);
+        return NULL;
     }
     //printf("Failed to allocate VBuffer! %s, w %u h %u bpp %u, rmask %x gmask %x bmask %x amask %x, %x %x %x, %x %x %x\n", SDL_GetError(), fmt->width, fmt->height, fmt->format.bpp, rbitmask, gbitmask, bbitmask, abitmask, fmt->format.r_bits, fmt->format.g_bits, fmt->format.b_bits, fmt->format.r_shift, fmt->format.g_shift, fmt->format.b_shift);
     
@@ -277,6 +445,10 @@ int stdDisplay_VBufferLock(stdVBuffer *buf)
 {
     if (!buf) return 0;
 
+    if (!buf->sdlSurface) {
+        return buf->surface_lock_alloc != NULL;
+    }
+
     SDL_LockSurface(buf->sdlSurface);
     buf->surface_lock_alloc = (char*)buf->sdlSurface->pixels;
     return 1;
@@ -285,6 +457,10 @@ int stdDisplay_VBufferLock(stdVBuffer *buf)
 void stdDisplay_VBufferUnlock(stdVBuffer *buf)
 {
     if (!buf) return;
+
+    if (!buf->sdlSurface) {
+        return;
+    }
     
     buf->surface_lock_alloc = NULL;
     SDL_UnlockSurface(buf->sdlSurface);
@@ -305,7 +481,7 @@ int stdDisplay_VBufferCopy(stdVBuffer *vbuf, stdVBuffer *vbuf2, unsigned int bli
     //if (vbuf == &Video_menuBuffer)
     //    stdPlatform_Printf("Vbuffer copy to menu %u,%u %ux%u %u,%u\n", rect->x, rect->y, rect->width, rect->height, blit_x, blit_y);
     
-    if (vbuf->palette)
+    if (vbuf->palette && vbuf->sdlSurface && vbuf->sdlSurface->format && vbuf->sdlSurface->format->palette)
     {
         rdColor24* pal24 = (rdColor24*)vbuf->palette;
         SDL_Color* tmp = (SDL_Color*)malloc(sizeof(SDL_Color) * 256);
@@ -321,7 +497,7 @@ int stdDisplay_VBufferCopy(stdVBuffer *vbuf, stdVBuffer *vbuf2, unsigned int bli
         free(tmp);
     }
     
-    if (vbuf2->palette)
+    if (vbuf2->palette && vbuf2->sdlSurface && vbuf2->sdlSurface->format && vbuf2->sdlSurface->format->palette)
     {
         rdColor24* pal24 = (rdColor24*)vbuf2->palette;
         SDL_Color* tmp = (SDL_Color*)malloc(sizeof(SDL_Color) * 256);
@@ -340,8 +516,11 @@ int stdDisplay_VBufferCopy(stdVBuffer *vbuf, stdVBuffer *vbuf2, unsigned int bli
     SDL_Rect dstRect = {(int)blit_x, (int)blit_y, (int)rect->width, (int)rect->height};
     SDL_Rect srcRect = {(int)rect->x, (int)rect->y, (int)rect->width, (int)rect->height};
     
-    uint8_t* srcPixels = (uint8_t*)vbuf2->sdlSurface->pixels;
-    uint8_t* dstPixels = (uint8_t*)vbuf->sdlSurface->pixels;
+    uint8_t* srcPixels = stdDisplay_VBufferPixels(vbuf2);
+    uint8_t* dstPixels = stdDisplay_VBufferPixels(vbuf);
+    if (!srcPixels || !dstPixels) {
+        return 0;
+    }
     uint32_t srcStride = vbuf2->format.width_in_bytes;
     uint32_t dstStride = vbuf->format.width_in_bytes;
 
@@ -425,9 +604,12 @@ int stdDisplay_VBufferFill(stdVBuffer *vbuf, int fillColor, rdRect *rect)
     
     //printf("%x; %u %u %u %u\n", fillColor, rect->x, rect->y, rect->width, rect->height);
     
-    uint8_t* dstPixels = (uint8_t*)vbuf->sdlSurface->pixels;
+    uint8_t* dstPixels = stdDisplay_VBufferPixels(vbuf);
     uint32_t dstStride = vbuf->format.width_in_bytes;
     uint32_t max_idx = dstStride * vbuf->format.height;
+    if (!dstPixels) {
+        return 0;
+    }
     for (int i = 0; i < rect->width; i++)
     {
         for (int j = 0; j < rect->height; j++)
@@ -474,7 +656,14 @@ void stdDisplay_VBufferFree(stdVBuffer *vbuf)
         return;
     }
     stdDisplay_VBufferUnlock(vbuf);
-    SDL_FreeSurface(vbuf->sdlSurface);
+#if defined(TARGET_LINUX_GLES)
+    stdDisplay_Free8bppBuffer(vbuf);
+#else
+    if (vbuf->sdlSurface) {
+        SDL_FreeSurface(vbuf->sdlSurface);
+        vbuf->sdlSurface = NULL;
+    }
+#endif
     std_pHS->free(vbuf);
 }
 

@@ -986,53 +986,42 @@ LABEL_15:
 
 int stdFont_sub_434EC0(stdVBuffer *vBuffer, stdFont *font, int a3, int a4, int a5, int32_t *paddings, const wchar_t *text, int a8)
 {
-    int32_t *paddingList; // ebp
-    int padding; // edi
-    wchar_t *v11; // ebx
-    wchar_t *v12; // eax
-    wchar_t *v13; // esi
-    wchar_t v14; // cx
-    int v15; // ecx
-    int i; // eax
-    int v17; // eax
-    int v18; // [esp+10h] [ebp-4h]
-    uint16_t a7_;
+    int32_t *paddingList;
+    int padding;
+    const wchar_t *cursor;
+    wchar_t segment[512];
 
     paddingList = paddings;
     padding = 0;
-    v18 = 0;
     if ( !paddings )
         return stdFont_Draw1(vBuffer, font, a3, a4, a5, text, a8);
-    v11 = (wchar_t*)text;
-    while ( *v11 )
+
+    cursor = text;
+    while ( *cursor )
     {
-        v12 = __wcsrchr(v11, 9u);
-        v13 = v12;
-        if ( v12 )
-        {
-            v14 = *v12;
-            *v12 = 0;
-            a7_ = v14;
-        }
+        const wchar_t *tab = __wcschr(cursor, '\t');
+        size_t seglen = tab ? (size_t)(tab - cursor) : _wcslen(cursor);
+        if ( seglen >= sizeof(segment) / sizeof(segment[0]) )
+            seglen = sizeof(segment) / sizeof(segment[0]) - 1;
+        if ( seglen )
+            memcpy(segment, cursor, seglen * sizeof(wchar_t));
+        segment[seglen] = 0;
+
         if ( padding + a3 >= (signed int)vBuffer->format.width )
             break;
-        padding += stdFont_Draw1(vBuffer, font, padding + a3, a4, a5 - padding, v11, a8);
-        if ( v13 )
-        {
-            v11 = v13 + 1;
-            *v13 = a7_;
-            v15 = v18;
-        }
-        else
-        {
-            v15 = 1;
-            v18 = 1;
-        }
-        if ( v15 )
+
+        padding += stdFont_Draw1(vBuffer, font, padding + a3, a4, a5 - padding, segment, a8);
+
+        if ( !tab )
             break;
-        if ( *v11 )
+
+        cursor = tab + 1;
+        if ( !*cursor )
+            break;
+
         {
-            for ( i = *paddingList; i != 0; ++paddingList )
+            int i = *paddingList;
+            for ( ; i != 0; ++paddingList )
             {
                 if ( padding <= i )
                     break;
@@ -1044,10 +1033,10 @@ int stdFont_sub_434EC0(stdVBuffer *vBuffer, stdFont *font, int a3, int a4, int a
             }
             else
             {
-                v17 = 8 * font->marginX;
-                if ( v17 <= 16 )
-                    v17 = 16;
-                padding += v17;
+                int tabWidth = 8 * font->marginX;
+                if ( tabWidth <= 16 )
+                    tabWidth = 16;
+                padding += tabWidth;
             }
         }
     }
@@ -1218,7 +1207,7 @@ stdFont* stdFont_New(int marginY, int marginX, int16_t field_28, uint16_t charFi
 
 int stdFont_sub_435570(uint16_t ch)
 {
-    if ( iswspace(ch) )
+    if ( _iswspace(ch) )
         return 1;
     if ( ch == 0x2028 ) // Unicode line separator
         return 1;
@@ -1233,7 +1222,7 @@ int stdFont_sub_4355F0(stdFont *font, const wchar_t *text)
     while ( *text && maxLen > 0 )
     {
         int glyphWidth;
-        if ( iswspace(*text) )
+        if ( _iswspace(*text) )
         {
             glyphWidth = font->marginX;
         }
@@ -1298,7 +1287,7 @@ int stdFont_sub_4356B0(const wchar_t *text, stdFont *font, int *pMaxWidth)
         while ( ch && remaining > 0 )
         {
             int glyphWidth;
-            if ( iswspace(*iter) )
+            if ( _iswspace(*iter) )
             {
                 glyphWidth = font->marginX;
             }
@@ -1333,7 +1322,7 @@ void stdFont_sub_435190(stdVBuffer *vbuf, stdFont *font, int destX, int destY, u
 
     stdVBuffer *fontSurf = *font->pBitmap->mipSurfaces;
 
-    if ( iswspace(ch) )
+    if ( _iswspace(ch) )
         return;
 
     uint16_t lookupChar = ch;

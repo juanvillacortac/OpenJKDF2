@@ -1,5 +1,6 @@
 #include "stdBitmap.h"
 
+#include "Platform/trace_gles.h"
 #include "stdPlatform.h"
 #include "General/stdColor.h"
 #include "General/stdString.h"
@@ -66,6 +67,7 @@ int stdBitmap_EnsureData(stdBitmap *pBitmap) {
     stdString_SafeStrCopy(tmp, pBitmap->fpath_full, 128);
     stdBitmap_FreeEntry(pBitmap);
     stdPlatform_Printf("stdBitmap: Ensuring data for: `%s`\n", tmp);
+    openjkdf2_trace("stdBitmap_EnsureData: load");
     return stdBitmap_LoadEntry(tmp, pBitmap, 1, 0, 0); // TODO
 #endif
 }
@@ -209,7 +211,7 @@ int stdBitmap_LoadEntryFromFile(intptr_t fp, stdBitmap *out, int bCreateDDrawSur
 
         out->mipSurfaces[mipCount] = surface;
         stdDisplay_VBufferLock(surface);
-        lockAlloc = surface->surface_lock_alloc;
+        lockAlloc = (char*)stdDisplay_VBufferPixels(surface);
         
         v15 = surface->format.width * ((unsigned int)surface->format.format.bpp >> 3);
         for ( i = 0; i < vbufTexFmt.height; ++i )
@@ -404,7 +406,7 @@ int stdBitmap_AppendToFile(stdFile_t fhand, stdBitmap *pBitmap)
 
         stdDisplay_VBufferLock(vbuf);
         uint32_t rowBytes = (vbuf->format.format.bpp >> 3) * dims[0];
-        uint8_t *pixels = (uint8_t *)vbuf->surface_lock_alloc;
+        uint8_t *pixels = stdDisplay_VBufferPixels(vbuf);
         for (uint32_t row = 0; row < (uint32_t)dims[1]; row++)
         {
             written = std_pHS->fileWrite(fhand, pixels, rowBytes);

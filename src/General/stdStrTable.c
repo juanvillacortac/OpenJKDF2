@@ -8,6 +8,13 @@
 
 static wchar_t stdStrTable_tmpBuf[64];
 
+static void stdStrTable_StripLineEnd(char *line)
+{
+    size_t len = _strlen(line);
+    while (len > 0 && line[len - 1] == '\r')
+        line[--len] = 0;
+}
+
 int stdStrTable_Load(stdStrTable *strtable, char *fpath)
 {
     int v2; // edi
@@ -48,11 +55,13 @@ int stdStrTable_Load(stdStrTable *strtable, char *fpath)
     do
     {
         std_pHS->fileGets(fhand, a1a, 255);
+        stdStrTable_StripLineEnd(a1a);
         if ( !_strchr(a1a, 10) )
         {
             do
             {
                 std_pHS->fileGets(fhand, v32, 64);
+                stdStrTable_StripLineEnd(v32);
             }
             while ( !_strchr(v32, '\n') );
         }
@@ -89,10 +98,14 @@ int stdStrTable_Load(stdStrTable *strtable, char *fpath)
         do
         {
             std_pHS->fileGets(fhand, a1a, 255);
+            stdStrTable_StripLineEnd(a1a);
             if ( !_strchr(a1a, '\n') )
             {
                 do
+                {
                     std_pHS->fileGets(fhand, v32, 64);
+                    stdStrTable_StripLineEnd(v32);
+                }
                 while ( !_strchr(v32, '\n') );
             }
             for ( j = a1a; __isspace(*j); ++j )
@@ -280,7 +293,7 @@ int stdStrTable_ParseUniLine(stdFile_t fhand, wchar_t *buf)
                 std_pHS->fileGetws(fhand, tmpBuf, 10);
             while ( !__wcschr(tmpBuf, L'\n') );
         }
-        for ( p = buf; iswspace(*p); ++p )
+        for ( p = buf; _iswspace(*p); ++p )
             ;
         if ( *p != L'#' && *p && *p != L'\r' && *p != L'\n' )
             found = 1;

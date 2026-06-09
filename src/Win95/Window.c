@@ -25,6 +25,7 @@
 
 #include <fcntl.h> 
 #include <stdio.h>
+#include <stdlib.h>
 #ifndef _WIN32
 #include <unistd.h>
 #endif //!_WIN32
@@ -39,6 +40,10 @@
 //#include <stropts.h>
 
 #include "SDL2_helper.h"
+#include "Platform/trace_gles.h"
+#if defined(TARGET_LINUX_GLES)
+#include "Platform/Posix/gles_loader.h"
+#endif
 
 #include <string.h>
 
@@ -1278,6 +1283,7 @@ EM_JS(int, canvas_get_height, (), {
 
 void Window_RecreateSDL2Window()
 {
+    openjkdf2_trace("Window_RecreateSDL2Window: enter");
 #ifdef ARCH_WASM
     static int onlyOnce = 0;
     if (onlyOnce) {
@@ -1292,9 +1298,12 @@ void Window_RecreateSDL2Window()
     Window_needsRecreate = 0;
 
     if (displayWindow) {
+        openjkdf2_trace("Window_RecreateSDL2Window: destroy old");
         std3D_FreeResources();
         SDL_GL_DeleteContext(glWindowContext);
         SDL_DestroyWindow(displayWindow);
+        displayWindow = NULL;
+        glWindowContext = NULL;
     }
 
     // HACK: side-step the json stuff
@@ -1334,13 +1343,13 @@ void Window_RecreateSDL2Window()
     //flags &= ~SDL_WINDOW_RESIZABLE;
 #endif
 
-#ifdef TARGET_ANDROID
-    flags = SDL_WINDOW_SHOWN;
+#if defined(TARGET_ANDROID) || defined(TARGET_LINUX_GLES)
+    flags = SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN_DESKTOP;
 #endif
 
 #ifdef ARCH_WASM
     displayWindow = SDL_CreateWindow(Window_isHiDpi ? "OpenJKDF2 HiDPI" : "OpenJKDF2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, canvas_get_width(), canvas_get_height(), flags);
-#elif defined(TARGET_ANDROID)
+#elif defined(TARGET_ANDROID) || defined(TARGET_LINUX_GLES)
     displayWindow = SDL_CreateWindow(Window_isHiDpi ? "OpenJKDF2 HiDPI" : "OpenJKDF2", 0, 0, Window_screenXSize, Window_screenYSize, flags);
 #else
     displayWindow = SDL_CreateWindow(Window_isHiDpi ? "OpenJKDF2 HiDPI" : "OpenJKDF2", Window_xPos, Window_yPos, Window_screenXSize, Window_screenYSize, flags);
@@ -1348,9 +1357,11 @@ void Window_RecreateSDL2Window()
     if (!displayWindow) {
         char errtmp[256];
         snprintf(errtmp, 256, "!! Failed to create SDL2 window !!\n%s", SDL_GetError());
+        openjkdf2_trace("Window_RecreateSDL2Window: SDL_CreateWindow failed");
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errtmp, NULL);
         exit (-1);
     }
+    openjkdf2_trace("Window_RecreateSDL2Window: SDL_CreateWindow ok");
     //SDL_SetRenderDrawBlendMode(displayRenderer, SDL_BLENDMODE_BLEND);
 
 #if defined(MACOS) && defined(__aarch64__)
@@ -1366,7 +1377,21 @@ void Window_RecreateSDL2Window()
     SDL_RaiseWindow(displayWindow);
 
     glWindowContext = SDL_GL_CreateContext(displayWindow);
-    
+
+#if defined(TARGET_ANDROID) || defined(TARGET_LINUX_GLES)
+    // GLES fallback: 3.0 ES -> 2.0 ES (no desktop GL CORE on Mali/KMSDRM)
+    if (glWindowContext == NULL)
+    {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+        SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+        glWindowContext = SDL_GL_CreateContext(displayWindow);
+        if (glWindowContext) {
+            openjkdf2_trace("Window_RecreateSDL2Window: GLES 2.0 context");
+        }
+    }
+#else
     // Retry with 3.30 instead
     if (glWindowContext == NULL)
     {
@@ -1387,18 +1412,43 @@ void Window_RecreateSDL2Window()
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
         glWindowContext = SDL_GL_CreateContext(displayWindow);
     }
+#endif
     
     if (glWindowContext == NULL)
     {
         char errtmp[256];
         snprintf(errtmp, 256, "!! Failed to initialize SDL OpenGL context !!\n%s", SDL_GetError());
+        openjkdf2_trace("Window_RecreateSDL2Window: SDL_GL_CreateContext failed");
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errtmp, NULL);
         exit(-1);
     }
 
-    SDL_GL_MakeCurrent(displayWindow, glWindowContext);
+    openjkdf2_trace("Window_RecreateSDL2Window: GL context ok");
+    if (SDL_GL_MakeCurrent(displayWindow, glWindowContext) != 0) {
+        openjkdf2_trace_fmt("Window_RecreateSDL2Window: MakeCurrent failed: %s", SDL_GetError());
+    }
+#if defined(TARGET_LINUX_GLES)
+    {
+        int gl_major = 0, gl_minor = 0, gl_profile = 0;
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &gl_major);
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &gl_minor);
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &gl_profile);
+        openjkdf2_trace_fmt("Window_RecreateSDL2Window: context %d.%d profile=0x%x",
+            gl_major, gl_minor, gl_profile);
+        if (!gles_loader_init()) {
+            openjkdf2_trace("Window_RecreateSDL2Window: gles_loader_init failed");
+        } else {
+            const GLubyte *ver = glGetString(GL_VERSION);
+            const GLubyte *renderer = glGetString(GL_RENDERER);
+            openjkdf2_trace_fmt("Window_RecreateSDL2Window: GL_VERSION=%s",
+                ver ? (const char*)ver : "null");
+            openjkdf2_trace_fmt("Window_RecreateSDL2Window: GL_RENDERER=%s",
+                renderer ? (const char*)renderer : "null");
+        }
+    }
+#endif
     SDL_GL_SetSwapInterval(jkPlayer_enableVsync); // Disable vsync
-#ifndef TARGET_ANDROID
+#if !defined(TARGET_ANDROID)
     SDL_StartTextInput();
 #endif
 
@@ -1406,12 +1456,16 @@ void Window_RecreateSDL2Window()
     SDL_GetWindowSize(displayWindow, &Window_screenXSize, &Window_screenYSize);
 
     Window_resized = 1;
+    openjkdf2_trace("Window_RecreateSDL2Window: done");
 }
 
 void Window_Main_Loop()
 {
+    openjkdf2_trace("Window_Main_Loop: enter");
     jkMain_GuiAdvance(); // TODO needed?
+    openjkdf2_trace("Window_Main_Loop: after GuiAdvance");
     Window_msg_main_handler(g_hWnd, WM_PAINT, 0, 0);
+    openjkdf2_trace("Window_Main_Loop: after WM_PAINT");
     
     //Window_SdlUpdate();
 }
@@ -1439,9 +1493,32 @@ int Window_Main_Linux(int argc, char** argv)
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #endif
 
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_NOPARACHUTE | SDL_INIT_GAMECONTROLLER);
+    openjkdf2_trace("Window_Main_Linux: SDL_Init");
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_NOPARACHUTE | SDL_INIT_GAMECONTROLLER) < 0) {
+        openjkdf2_trace("Window_Main_Linux: SDL_Init failed");
+        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        return 1;
+    }
+    openjkdf2_trace("Window_Main_Linux: SDL_Init ok");
 
-    
+#if defined(TARGET_LINUX_GLES)
+    {
+        const char* w_env = getenv("DISPLAY_WIDTH");
+        const char* h_env = getenv("DISPLAY_HEIGHT");
+        if (w_env && h_env) {
+            int w = atoi(w_env);
+            int h = atoi(h_env);
+            if (w > 0 && h > 0) {
+                Window_screenXSize = w;
+                Window_screenYSize = h;
+                Window_xSize = w;
+                Window_ySize = h;
+                Window_isFullscreen = 1;
+            }
+        }
+    }
+#endif
+
     if ((SDL_GetHintBoolean("SteamClientLaunch", 0) || SDL_GetHintBoolean("SteamOS", 0) || SDL_GetHintBoolean("SteamDeck", 0)) && SDL_GetHintBoolean("SteamGamepadUI", 0)) {
         Window_bShouldPopSteamKeyboard = 1;
         Window_isFullscreen = 1;
@@ -1468,7 +1545,7 @@ int Window_Main_Linux(int argc, char** argv)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
     SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
 #endif
-#elif defined(TARGET_ANDROID)
+#elif defined(TARGET_ANDROID) || defined(TARGET_LINUX_GLES)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
@@ -1487,8 +1564,10 @@ int Window_Main_Linux(int argc, char** argv)
 
 #endif
 
+    openjkdf2_trace("Window_Main_Linux: Window_RecreateSDL2Window");
     Window_RecreateSDL2Window();
-#if !defined(TARGET_ANDROID) && !defined(ARCH_WASM)
+    openjkdf2_trace("Window_Main_Linux: GL context ok");
+#if !defined(TARGET_ANDROID) && !defined(TARGET_LINUX_GLES) && !defined(ARCH_WASM)
     glewInit();
 #endif
     
@@ -1511,13 +1590,29 @@ int Window_Main_Linux(int argc, char** argv)
         strcat(cmdLine, " ");
     }
     
+    openjkdf2_trace("Window_Main_Linux: Main_Startup");
     result = Main_Startup(cmdLine);
+    openjkdf2_trace("Window_Main_Linux: Main_Startup done");
 
-    int fullscreen = wuRegistry_GetBool("Window_isFullscreen", 0);
-    int hidpi = wuRegistry_GetBool("Window_isHiDpi", 0);
+    openjkdf2_trace("Window_Main_Linux: registry read");
+    int fullscreen = wuRegistry_GetBool("Window_isFullscreen", Window_isFullscreen);
+    int hidpi = wuRegistry_GetBool("Window_isHiDpi", Window_isHiDpi);
+    openjkdf2_trace("Window_Main_Linux: apply window settings");
     Window_SetFullscreen(fullscreen);
     Window_SetHiDpi(hidpi);
+#if defined(TARGET_LINUX_GLES)
+    // Primer create ya aplicó 720x480; recrear aquí solo destruye GL sin haber renderizado
+    if (Window_needsRecreate) {
+        openjkdf2_trace("Window_Main_Linux: Window_RecreateSDL2Window (post-startup)");
+        Window_RecreateSDL2Window();
+    } else {
+        openjkdf2_trace("Window_Main_Linux: skip post-startup recreate");
+    }
+#else
+    openjkdf2_trace("Window_Main_Linux: Window_RecreateSDL2Window (post-startup)");
     Window_RecreateSDL2Window();
+#endif
+    openjkdf2_trace("Window_Main_Linux: window ready");
 
     if (!result) return result;
 
@@ -1532,11 +1627,17 @@ int Window_Main_Linux(int argc, char** argv)
 
     g_window_not_destroyed = 1;
     
+    openjkdf2_trace("Window_Main_Linux: WM_CREATE");
     Window_msg_main_handler(g_hWnd, 0x1, 0, 0); // WM_CREATE
+    openjkdf2_trace("Window_Main_Linux: WM_ACTIVATE");
     Window_msg_main_handler(g_hWnd, 0x6, 2, 0); // WM_ACTIVATE
+    openjkdf2_trace("Window_Main_Linux: WM_ACTIVATEAPP");
     Window_msg_main_handler(g_hWnd, 0x1C, 1, 0); // WM_ACTIVATEAPP
+    openjkdf2_trace("Window_Main_Linux: WM_SHOWWINDOW");
     Window_msg_main_handler(g_hWnd, 0x18, 0, 0); // WM_SHOWWINDOW
+    openjkdf2_trace("Window_Main_Linux: WM_PAINT (bootstrap)");
     Window_msg_main_handler(g_hWnd, WM_PAINT, 0, 0);
+    openjkdf2_trace("Window_Main_Linux: main loop");
 
 
 #ifdef ARCH_WASM

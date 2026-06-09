@@ -4,6 +4,7 @@
 #include "hook.h"
 #include "jk.h"
 #include "types.h"
+#include "Platform/trace_gles.h"
 
 #include "General/stdMath.h"
 
@@ -337,6 +338,7 @@ extern "C"
 
 int main(int argc, char** argv)
 {
+    openjkdf2_trace("main: enter");
 #ifdef ARCH_WASM
     EM_ASM(
         FS.mkdir('/jk1/player');
@@ -684,6 +686,7 @@ int main(int argc, char** argv)
 
         openjkdf2_restartMode = OPENJKDF2_RESTART_NONE;
         memset(openjkdf2_aRestartPath, 0, sizeof(openjkdf2_aRestartPath));
+        openjkdf2_trace("main: Window_Main_Linux");
         Window_Main_Linux(argc, argv);
 
         printf("openjkdf2_bOrigWasRunningFromExistingInstall %x\n", openjkdf2_bOrigWasRunningFromExistingInstall);
@@ -839,6 +842,7 @@ void print_backtrace(void)
 
 void crash_handler_basic(int sig) 
 {
+    openjkdf2_trace("crash_handler_basic");
     print_backtrace();
     signal(SIGSEGV, SIG_DFL); // Pass error to OS; MacOS has nicer crash diagnostics
 }

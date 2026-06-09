@@ -14,6 +14,9 @@
 #include "Engine/rdColormap.h"
 #include "Primitives/rdPrimit3.h"
 #include "Primitives/rdDebug.h"
+#if defined(TARGET_LINUX_GLES)
+#include "Platform/trace_gles.h"
+#endif
 
 model3Loader_t rdModel3_RegisterLoader(model3Loader_t loader)
 {
@@ -61,6 +64,9 @@ rdModel3* rdModel3_New(char *path)
 // MOTS altered (RGB lights?)
 int rdModel3_Load(char *model_fpath, rdModel3 *model)
 {
+#if defined(TARGET_LINUX_GLES)
+    openjkdf2_trace_fmt("rdModel3_Load: %s", model_fpath ? model_fpath : "(null)");
+#endif
     rdMesh *mesh; // ebx
     int vertex_num; // edi
     int v25; // edi

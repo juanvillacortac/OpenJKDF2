@@ -921,6 +921,15 @@ final_check:
 
 int InstallHelper_AttemptInstall()
 {
+#if defined(TARGET_LINUX_GLES)
+    SDL_ShowSimpleMessageBox(
+        SDL_MESSAGEBOX_ERROR,
+        "OpenJKDF2",
+        "Missing game data. Copy Steam JKDF2 files (episode/, resource/) into ports/openjkdf2/.",
+        NULL);
+    return 0;
+#endif
+
     // TODO: Polyglot
     const SDL_MessageBoxButtonData buttons[] = {
         { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Install" },
@@ -1110,7 +1119,11 @@ void InstallHelper_SetCwd()
         InstallHelper_AttemptInstall();
     }*/
     if (!util_FileExists("resource/jk_.cd")) {
+#if defined(TARGET_LINUX_GLES)
+        InstallHelper_CheckRequiredAssets(0);
+#else
         InstallHelper_CheckRequiredAssets(1);
+#endif
     }
 
     stdFileUtil_MkDir("mods");

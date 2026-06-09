@@ -1,0 +1,150 @@
+#ifndef _OPENJKDF2_GLES_LOADER_H
+#define _OPENJKDF2_GLES_LOADER_H
+
+#if defined(TARGET_LINUX_GLES)
+
+#include <GLES3/gl3.h>
+#include <stdbool.h>
+
+bool gles_loader_init(void);
+
+extern PFNGLACTIVETEXTUREPROC gles_glActiveTexture;
+#define glActiveTexture gles_glActiveTexture
+extern PFNGLATTACHSHADERPROC gles_glAttachShader;
+#define glAttachShader gles_glAttachShader
+extern PFNGLBINDBUFFERPROC gles_glBindBuffer;
+#define glBindBuffer gles_glBindBuffer
+extern PFNGLBINDFRAMEBUFFERPROC gles_glBindFramebuffer;
+#define glBindFramebuffer gles_glBindFramebuffer
+extern PFNGLBINDRENDERBUFFERPROC gles_glBindRenderbuffer;
+#define glBindRenderbuffer gles_glBindRenderbuffer
+extern PFNGLBINDTEXTUREPROC gles_glBindTexture;
+#define glBindTexture gles_glBindTexture
+extern PFNGLBINDVERTEXARRAYPROC gles_glBindVertexArray;
+#define glBindVertexArray gles_glBindVertexArray
+extern PFNGLBLENDEQUATIONPROC gles_glBlendEquation;
+#define glBlendEquation gles_glBlendEquation
+extern PFNGLBLENDFUNCPROC gles_glBlendFunc;
+#define glBlendFunc gles_glBlendFunc
+extern PFNGLBUFFERDATAPROC gles_glBufferData;
+#define glBufferData gles_glBufferData
+extern PFNGLCHECKFRAMEBUFFERSTATUSPROC gles_glCheckFramebufferStatus;
+#define glCheckFramebufferStatus gles_glCheckFramebufferStatus
+extern PFNGLCLEARPROC gles_glClear;
+#define glClear gles_glClear
+extern PFNGLCLEARCOLORPROC gles_glClearColor;
+#define glClearColor gles_glClearColor
+extern PFNGLCOMPILESHADERPROC gles_glCompileShader;
+#define glCompileShader gles_glCompileShader
+extern PFNGLCREATEPROGRAMPROC gles_glCreateProgram;
+#define glCreateProgram gles_glCreateProgram
+extern PFNGLCREATESHADERPROC gles_glCreateShader;
+#define glCreateShader gles_glCreateShader
+extern PFNGLCULLFACEPROC gles_glCullFace;
+#define glCullFace gles_glCullFace
+extern PFNGLDELETEBUFFERSPROC gles_glDeleteBuffers;
+#define glDeleteBuffers gles_glDeleteBuffers
+extern PFNGLDELETEFRAMEBUFFERSPROC gles_glDeleteFramebuffers;
+#define glDeleteFramebuffers gles_glDeleteFramebuffers
+extern PFNGLDELETEPROGRAMPROC gles_glDeleteProgram;
+#define glDeleteProgram gles_glDeleteProgram
+extern PFNGLDELETERENDERBUFFERSPROC gles_glDeleteRenderbuffers;
+#define glDeleteRenderbuffers gles_glDeleteRenderbuffers
+extern PFNGLDELETESHADERPROC gles_glDeleteShader;
+#define glDeleteShader gles_glDeleteShader
+extern PFNGLDELETETEXTURESPROC gles_glDeleteTextures;
+#define glDeleteTextures gles_glDeleteTextures
+extern PFNGLDEPTHFUNCPROC gles_glDepthFunc;
+#define glDepthFunc gles_glDepthFunc
+extern PFNGLDEPTHMASKPROC gles_glDepthMask;
+#define glDepthMask gles_glDepthMask
+extern PFNGLDISABLEVERTEXATTRIBARRAYPROC gles_glDisableVertexAttribArray;
+#define glDisableVertexAttribArray gles_glDisableVertexAttribArray
+extern PFNGLDRAWBUFFERSPROC gles_glDrawBuffers;
+#define glDrawBuffers gles_glDrawBuffers
+extern PFNGLDRAWELEMENTSPROC gles_glDrawElements;
+#define glDrawElements gles_glDrawElements
+extern PFNGLENABLEPROC gles_glEnable;
+#define glEnable gles_glEnable
+extern PFNGLENABLEVERTEXATTRIBARRAYPROC gles_glEnableVertexAttribArray;
+#define glEnableVertexAttribArray gles_glEnableVertexAttribArray
+extern PFNGLFLUSHPROC gles_glFlush;
+#define glFlush gles_glFlush
+extern PFNGLFRAMEBUFFERRENDERBUFFERPROC gles_glFramebufferRenderbuffer;
+#define glFramebufferRenderbuffer gles_glFramebufferRenderbuffer
+extern PFNGLFRAMEBUFFERTEXTURE2DPROC gles_glFramebufferTexture2D;
+#define glFramebufferTexture2D gles_glFramebufferTexture2D
+extern PFNGLGENBUFFERSPROC gles_glGenBuffers;
+#define glGenBuffers gles_glGenBuffers
+extern PFNGLGENERATEMIPMAPPROC gles_glGenerateMipmap;
+#define glGenerateMipmap gles_glGenerateMipmap
+extern PFNGLGENFRAMEBUFFERSPROC gles_glGenFramebuffers;
+#define glGenFramebuffers gles_glGenFramebuffers
+extern PFNGLGENRENDERBUFFERSPROC gles_glGenRenderbuffers;
+#define glGenRenderbuffers gles_glGenRenderbuffers
+extern PFNGLGENTEXTURESPROC gles_glGenTextures;
+#define glGenTextures gles_glGenTextures
+extern PFNGLGENVERTEXARRAYSPROC gles_glGenVertexArrays;
+#define glGenVertexArrays gles_glGenVertexArrays
+extern PFNGLGETATTRIBLOCATIONPROC gles_glGetAttribLocation;
+#define glGetAttribLocation gles_glGetAttribLocation
+extern PFNGLGETBUFFERPARAMETERIVPROC gles_glGetBufferParameteriv;
+#define glGetBufferParameteriv gles_glGetBufferParameteriv
+extern PFNGLGETINTEGERVPROC gles_glGetIntegerv;
+#define glGetIntegerv gles_glGetIntegerv
+extern PFNGLGETPROGRAMINFOLOGPROC gles_glGetProgramInfoLog;
+#define glGetProgramInfoLog gles_glGetProgramInfoLog
+extern PFNGLGETPROGRAMIVPROC gles_glGetProgramiv;
+#define glGetProgramiv gles_glGetProgramiv
+extern PFNGLGETSHADERINFOLOGPROC gles_glGetShaderInfoLog;
+#define glGetShaderInfoLog gles_glGetShaderInfoLog
+extern PFNGLGETSHADERIVPROC gles_glGetShaderiv;
+#define glGetShaderiv gles_glGetShaderiv
+extern PFNGLGETSTRINGPROC gles_glGetString;
+#define glGetString gles_glGetString
+extern PFNGLGETUNIFORMLOCATIONPROC gles_glGetUniformLocation;
+#define glGetUniformLocation gles_glGetUniformLocation
+extern PFNGLISPROGRAMPROC gles_glIsProgram;
+#define glIsProgram gles_glIsProgram
+extern PFNGLISSHADERPROC gles_glIsShader;
+#define glIsShader gles_glIsShader
+extern PFNGLLINKPROGRAMPROC gles_glLinkProgram;
+#define glLinkProgram gles_glLinkProgram
+extern PFNGLPIXELSTOREIPROC gles_glPixelStorei;
+#define glPixelStorei gles_glPixelStorei
+extern PFNGLREADPIXELSPROC gles_glReadPixels;
+#define glReadPixels gles_glReadPixels
+extern PFNGLRENDERBUFFERSTORAGEPROC gles_glRenderbufferStorage;
+#define glRenderbufferStorage gles_glRenderbufferStorage
+extern PFNGLSHADERSOURCEPROC gles_glShaderSource;
+#define glShaderSource gles_glShaderSource
+extern PFNGLTEXIMAGE2DPROC gles_glTexImage2D;
+#define glTexImage2D gles_glTexImage2D
+extern PFNGLTEXPARAMETERIPROC gles_glTexParameteri;
+#define glTexParameteri gles_glTexParameteri
+extern PFNGLTEXSTORAGE2DPROC gles_glTexStorage2D;
+#define glTexStorage2D gles_glTexStorage2D
+extern PFNGLTEXSUBIMAGE2DPROC gles_glTexSubImage2D;
+#define glTexSubImage2D gles_glTexSubImage2D
+extern PFNGLUNIFORM1FPROC gles_glUniform1f;
+#define glUniform1f gles_glUniform1f
+extern PFNGLUNIFORM1IPROC gles_glUniform1i;
+#define glUniform1i gles_glUniform1i
+extern PFNGLUNIFORM2FPROC gles_glUniform2f;
+#define glUniform2f gles_glUniform2f
+extern PFNGLUNIFORM3FPROC gles_glUniform3f;
+#define glUniform3f gles_glUniform3f
+extern PFNGLUNIFORM4FPROC gles_glUniform4f;
+#define glUniform4f gles_glUniform4f
+extern PFNGLUNIFORMMATRIX4FVPROC gles_glUniformMatrix4fv;
+#define glUniformMatrix4fv gles_glUniformMatrix4fv
+extern PFNGLUSEPROGRAMPROC gles_glUseProgram;
+#define glUseProgram gles_glUseProgram
+extern PFNGLVERTEXATTRIBPOINTERPROC gles_glVertexAttribPointer;
+#define glVertexAttribPointer gles_glVertexAttribPointer
+extern PFNGLVIEWPORTPROC gles_glViewport;
+#define glViewport gles_glViewport
+
+#endif
+
+#endif

@@ -111,7 +111,11 @@ flex_t sithActor_Hit(sithThing *sender, sithThing *receiver, flex_t amount, int 
     }
     if ( receiver )
     {
-        if ( receiver != sender && sender->controlType == SITH_CT_AI )
+        if ( receiver != sender
+          && sender->controlType == SITH_CT_AI
+          && sithThing_GetIdxFromThing(receiver)
+          && receiver->type != SITH_THING_FREE
+          && (receiver->thingflags & (SITH_TF_DEAD|SITH_TF_WILLBEREMOVED)) == 0 )
             sithAI_SetActorFireTarget(sender->actor, SITHAI_MODE_MOVING, (intptr_t)receiver);
         v7 = sithThing_GetParent(receiver);
         receiver_ = v7;

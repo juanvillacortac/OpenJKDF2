@@ -1,6 +1,5 @@
 #include "stdUpdater.h"
 
-#include <iostream>
 #include <stdio.h>
 #include <string.h>
 #include <nlohmann/json.hpp>

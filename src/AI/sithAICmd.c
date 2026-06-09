@@ -1472,7 +1472,10 @@ int sithAICmd_SenseDanger(sithActor *actor, sithAIClassEntry *aiclass, sithActor
         return 0;
     }
     sithSoundClass_PlayModeRandom(actor->thing, SITH_SC_SURPRISE);
-    if ( extra )
+    if ( extra
+      && sithThing_GetIdxFromThing(extra)
+      && extra->type != SITH_THING_FREE
+      && (extra->thingflags & (SITH_TF_DEAD|SITH_TF_WILLBEREMOVED)) == 0 )
         actor->pFleeThing = sithThing_GetParent(extra);
     result = 1;
     actor->flags &= ~SITHAI_MODE_SEARCHING;

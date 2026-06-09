@@ -1,22 +1,38 @@
 #include "stdJSON.h"
 
-#include <iostream>
-#include <fstream>
 #include <vector>
 #include <cstring>
+#include <cstdio>
 #include <stdlib.h>
 #ifndef _WIN32
 #include <unistd.h>
+#include <sys/stat.h>
 #endif
 #include <nlohmann/json.hpp>
-#include <filesystem>
 #include <unordered_map>
 #include <locale> 
 #include <codecvt> 
 #include "jk.h"
 #include "stdPlatform.h"
+#include "General/stdString.h"
 
-namespace fs = std::filesystem;
+static bool stdJSON_FileExists(const char* pFpath)
+{
+    if (!pFpath) {
+        return false;
+    }
+#ifndef _WIN32
+    struct stat st;
+    return stat(pFpath, &st) == 0 && S_ISREG(st.st_mode);
+#else
+    FILE* f = fopen(pFpath, "rb");
+    if (!f) {
+        return false;
+    }
+    fclose(f);
+    return true;
+#endif
+}
 
 // string (utf8) -> u16string
 static std::u16string utf8_to_utf16(const std::string& utf8)
@@ -78,15 +94,48 @@ static inline void stdJSON_PrintNullPtrWarning() {
 
 static nlohmann::json stdJSON_OpenAndReadFile(const char* pFpath)
 {
-    fs::path json_path = {pFpath};
     nlohmann::json json_file(nlohmann::json::value_t::object);
-    if (!fs::exists(json_path)) {
+    if (!stdJSON_FileExists(pFpath)) {
         return json_file;
     }
 
-    std::ifstream i(json_path);
-    i >> json_file;
-    i.close();
+    FILE* f = fopen(pFpath, "rb");
+    if (!f) {
+        return json_file;
+    }
+
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return json_file;
+    }
+
+    long sz = ftell(f);
+    if (sz < 0) {
+        fclose(f);
+        return json_file;
+    }
+
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return json_file;
+    }
+
+    std::string content;
+    if (sz > 0) {
+        content.resize((size_t)sz);
+        if (fread(content.data(), 1, (size_t)sz, f) != (size_t)sz) {
+            fclose(f);
+            return json_file;
+        }
+    }
+    fclose(f);
+
+    if (!content.empty()) {
+        try {
+            json_file = nlohmann::json::parse(content);
+        } catch (...) {
+        }
+    }
 
     return json_file;
 }
@@ -128,15 +177,17 @@ static int stdJSON_WriteToFile(const char* pFpath, nlohmann::json& json_file)
         return 0;
     }
 
-    fs::path json_path = {pFpath};
-    std::ofstream o(json_path);
-    if (!o)
+    std::string s = json_file.dump(4, ' ', true);
+    FILE* f = fopen(pFpath, "wb");
+    if (!f)
     {
         stdPlatform_Printf("ERROR: Failed to open `%s`!\n", pFpath);
         return 0;
     }
-    o << json_file.dump(4, ' ', true);
-    if (!o)
+    size_t written = fwrite(s.c_str(), 1, s.size(), f);
+    int ok = (written == s.size()) && (fflush(f) == 0);
+    fclose(f);
+    if (!ok)
     {
         stdPlatform_Printf("ERROR: Failed to write `%s`!\n", pFpath);
         return 0;
@@ -294,11 +345,7 @@ int stdJSON_GetString(const char* pFpath, const char* pKey, char* pOut, int outS
         stdJSON_SetString(pFpath, pKey, pValDefault);
     }
     
-    size_t readSize = strlen(out.c_str());
-    if (readSize < outSize) {
-        outSize = readSize;
-    }
-    _strncpy(pOut, out.c_str(), outSize);
+    stdString_SafeStrCopy(pOut, out.c_str(), outSize);
 
     return 1;
 }
@@ -349,11 +396,7 @@ int stdJSON_GetWString(const char* pFpath, const char* pKey, char16_t* pOut, int
         out = utf8_to_utf16(out_u8);
     }
     
-    size_t readSize = _wcslen((wchar_t*)out.data());
-    if (readSize < outSize) {
-        outSize = readSize;
-    }
-    _wcsncpy((wchar_t*)pOut, (wchar_t*)out.data(), outSize);
+    stdString_SafeWStrCopy((wchar_t*)pOut, (wchar_t*)out.data(), outSize);
 
     return 1;
 }

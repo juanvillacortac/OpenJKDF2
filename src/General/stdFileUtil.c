@@ -402,7 +402,7 @@ int stdFileUtil_FindNext(stdFileSearch *a1, stdFileSearchResult *a2)
                 tmp[i] = '/';
             }
         }
-        if (tmp[strlen(tmp)-1] = '/') {
+        if (tmp[strlen(tmp)-1] == '/') {
             tmp[strlen(tmp)-1] = 0;
         }
 

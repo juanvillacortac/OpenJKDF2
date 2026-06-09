@@ -91,6 +91,9 @@ void jkPlayer_nullsub_1(jkPlayerInfo* unk);
 void jkPlayer_CreateConf(wchar_t *name);
 void jkPlayer_WriteConf(wchar_t *name);
 int jkPlayer_ReadConf(wchar_t *name);
+#if defined(TARGET_LINUX_GLES)
+void jkPlayer_ApplyGlesHandheldDefaults(void);
+#endif
 void jkPlayer_SetPovModel(jkPlayerInfo *info, rdModel3 *model);
 MATH_FUNC void jkPlayer_DrawPov();
 MATH_FUNC void jkPlayer_renderSaberWeaponMesh(sithThing *a1);

@@ -32,10 +32,18 @@ char* stdString_FastCopy(const char *str)
 // Added: wchar
 wchar_t* stdString_FastWCopy(const wchar_t *str)
 {
-    if (!str) return NULL;
+    size_t len;
+    wchar_t* result;
 
-    wchar_t* result = (wchar_t*)std_pHS->alloc((_wcslen(str) + 1)* sizeof(wchar_t));
-    stdString_SafeWStrCopy(result, str, _wcslen(str)+1);
+    if ( !str )
+        return NULL;
+
+    len = _wcslen(str);
+    result = (wchar_t*)std_pHS->alloc((len + 1) * sizeof(wchar_t));
+    if ( !result )
+        return NULL;
+
+    _wcscpy(result, str);
     return result;
 }
 
@@ -242,27 +250,29 @@ int stdString_wstrncat(wchar_t *a1, int a2, int a3, wchar_t *a4)
 
 wchar_t* stdString_CstrCopy(const char *a1)
 {
-    wchar_t *v1; // ebp
-    signed int v2; // eax
-    wchar_t *v3; // esi
-    signed int v4; // ecx
-    uint8_t v5; // dl
+    wchar_t *v1;
+    signed int v4;
+    signed int v2;
+    wchar_t *v3;
+    uint8_t v5;
 
-    v1 = (wchar_t *)std_pHS->alloc(sizeof(wchar_t) * (_strlen(a1) + 1));
-    v2 = 0;
-    v3 = v1;
+    if ( !a1 )
+        return NULL;
+
     v4 = _strlen(a1);
-    for (v2 = 0; v2 < v4; v2++)
+    v1 = (wchar_t *)std_pHS->alloc(sizeof(wchar_t) * (v4 + 1));
+    if ( !v1 )
+        return NULL;
+
+    v3 = v1;
+    for ( v2 = 0; v2 < v4; v2++ )
     {
-        v5 = a1[v2];
+        v5 = (uint8_t)a1[v2];
         if ( !v5 )
             break;
-        *v3 = v5;
-        ++v3;
+        *v3++ = v5;
     }
-    if ( v2 < v4 )
-        *v3 = 0;
-    v1[_strlen(a1)] = 0;
+    *v3 = 0;
     return v1;
 }
 

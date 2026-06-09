@@ -19,6 +19,7 @@
 #include "General/stdFnames.h"
 #include "General/stdMath.h"
 #include "Platform/std3D.h"
+#include "Platform/trace_gles.h"
 
 static wchar_t jkGuiTitle_tmpBuffer[512];
 static wchar_t jkGuiTitle_versionBuffer[64];
@@ -303,6 +304,7 @@ void jkGuiTitle_WorldLoadCallback(flex_t percentage)
 // MOTS altered: Added some string to the printf
 void jkGuiTitle_ShowLoadingStatic()
 {
+    openjkdf2_trace("jkGuiTitle_ShowLoadingStatic: enter");
     wchar_t *guiVersionStr; // eax
     int verMajor; // [esp-Ch] [ebp-2Ch]
     int verMinor; // [esp-8h] [ebp-28h]
@@ -312,9 +314,19 @@ void jkGuiTitle_ShowLoadingStatic()
     // Added: removed undefined behavior, used to use the stack.....
 
     // Added
+    if (!jkGui_stdBitmaps[JKGUI_BM_BK_MAIN]) {
+        openjkdf2_trace("jkGuiTitle_ShowLoadingStatic: bkMain bitmap missing");
+        return;
+    }
     stdBitmap_EnsureData(jkGui_stdBitmaps[JKGUI_BM_BK_MAIN]);
+    openjkdf2_trace("jkGuiTitle_ShowLoadingStatic: after EnsureData");
 
+    if (!jkGui_stdBitmaps[JKGUI_BM_BK_MAIN]->palette) {
+        openjkdf2_trace("jkGuiTitle_ShowLoadingStatic: bkMain palette missing");
+        return;
+    }
     jkGui_SetModeMenu(jkGui_stdBitmaps[JKGUI_BM_BK_MAIN]->palette);
+    openjkdf2_trace("jkGuiTitle_ShowLoadingStatic: after SetModeMenu");
     jkGuiTitle_whichLoading = 1;
     sithWorld_SetLoadPercentCallback(jkGuiTitle_WorldLoadCallback);
     verRevision = jkGuiTitle_verRevision;
@@ -326,6 +338,7 @@ void jkGuiTitle_ShowLoadingStatic()
     jkGuiTitle_elementsLoadStatic[4].wstr = jkGuiTitle_versionBuffer;
     jkGuiTitle_elementsLoadStatic[1].selectedTextEntry = 0;
     jkGuiRend_gui_sets_handler_framebufs(&jkGuiTitle_menuLoadStatic);
+    openjkdf2_trace("jkGuiTitle_ShowLoadingStatic: done");
 }
 
 void jkGuiTitle_ShowLoading(char *a1, wchar_t *a2)

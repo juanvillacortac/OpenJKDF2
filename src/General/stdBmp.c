@@ -140,7 +140,7 @@ int stdBmp_LoadEntryFromFile(const char *fpath, stdBitmap *bitmap, int create_dd
 
     stdVBuffer *vbuf = bitmap->mipSurfaces[0];
     int height = vbuf->format.height;
-    uint8_t *pixels = (uint8_t *)vbuf->surface_lock_alloc;
+    uint8_t *pixels = stdDisplay_VBufferPixels(vbuf);
     int stride = vbuf->format.width_in_bytes;
 
     // Read rows
@@ -160,10 +160,10 @@ int stdBmp_LoadEntryFromFile(const char *fpath, stdBitmap *bitmap, int create_dd
     if ( infoHeader.height > 0 )
     {
         int halfHeight = height / 2;
-        uint8_t *topRow = (uint8_t *)vbuf->surface_lock_alloc;
+        uint8_t *topRow = stdDisplay_VBufferPixels(vbuf);
         for (int i = 0; i < halfHeight; i++)
         {
-            uint8_t *botRow = (uint8_t *)vbuf->surface_lock_alloc + (height - 1 - i) * stride;
+            uint8_t *botRow = stdDisplay_VBufferPixels(vbuf) + (height - 1 - i) * stride;
             for (int j = 0; j < stride; j++)
             {
                 uint8_t tmp = topRow[j];

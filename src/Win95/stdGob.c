@@ -370,17 +370,23 @@ const char* stdGob_FileGets(stdGobFile *f, char *out, unsigned int len)
         if (!to_read) {
             return NULL;
         }
-        strncpy(out, (char*)(f->pMemory + f->seekOffs), to_read);
-        char* cutoff = strchr(out, '\n');
-        if (cutoff) {
-            *(++cutoff) = 0;
+        size_t i = 0;
+        while (f->seekOffs < f->memorySz && i + 1 < len)
+        {
+            char ch = ((char*)f->pMemory)[f->seekOffs++];
+            if (ch == '\r')
+                continue;
+            if (ch == '\n')
+            {
+                out[i] = '\n';
+                out[i + 1] = 0;
+                return out;
+            }
+            out[i++] = ch;
         }
-
-        size_t actual_read = strlen(out);
-        f->seekOffs += actual_read;
-
-        if (!actual_read) return NULL;
-
+        if (!i)
+            return NULL;
+        out[i] = 0;
         return out;
     }
 #endif
@@ -431,17 +437,26 @@ const wchar_t* stdGob_FileGetws(stdGobFile *f, wchar_t *out, unsigned int len)
         if (!to_read) {
             return NULL;
         }
-        __wcsncpy(out, (wchar_t*)(f->pMemory + f->seekOffs), to_read / sizeof(wchar_t));
-        wchar_t* cutoff = __wcschr(out, '\n');
-        if (cutoff) {
-            *(++cutoff) = 0;
+        size_t maxChars = to_read / sizeof(wchar_t);
+        size_t i = 0;
+        while (f->seekOffs + sizeof(wchar_t) <= f->memorySz && i + 1 < maxChars)
+        {
+            wchar_t ch = 0;
+            _memcpy(&ch, (char*)f->pMemory + f->seekOffs, sizeof(wchar_t));
+            f->seekOffs += sizeof(wchar_t);
+            if (ch == L'\r')
+                continue;
+            if (ch == L'\n')
+            {
+                out[i] = L'\n';
+                out[i + 1] = 0;
+                return out;
+            }
+            out[i++] = ch;
         }
-
-        size_t actual_read = (_wcslen(out))*sizeof(wchar_t);
-        f->seekOffs += actual_read;
-
-        if (!actual_read) return NULL;
-
+        if (!i)
+            return NULL;
+        out[i] = 0;
         return out;
     }
 #endif

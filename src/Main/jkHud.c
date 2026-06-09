@@ -49,6 +49,19 @@ static jkHudBitmap jkHud_aBitmaps[8] = {
 
 void jkHud_DrawGPU();
 
+#if defined(TARGET_LINUX_GLES)
+static void jkHud_GetLayoutSize(int *outW, int *outH)
+{
+    if (Video_pMenuBuffer && Video_pMenuBuffer->format.width > 0) {
+        *outW = Video_pMenuBuffer->format.width;
+        *outH = Video_pMenuBuffer->format.height;
+    } else {
+        *outW = Video_format.width;
+        *outH = Video_format.height;
+    }
+}
+#endif
+
 int jkHud_Startup()
 {
     if ( Main_bNoHUD )
@@ -140,11 +153,18 @@ int jkHud_Open()
 #endif
         ++fontIter;
     }
-    jkHud_leftBlitX = 0;
-    jkHud_leftBlitY = Video_format.height - HUD_SCALED((*jkHud_pStatusLeftBm->mipSurfaces)->format.height);
-    v6 = *jkHud_pStatusRightBm->mipSurfaces;
-    jkHud_rightBlitX = Video_format.width - HUD_SCALED(v6->format.width);
-    jkHud_rightBlitY = Video_format.height - HUD_SCALED(v6->format.height);
+    {
+        int layoutW = Video_format.width;
+        int layoutH = Video_format.height;
+#if defined(TARGET_LINUX_GLES)
+        jkHud_GetLayoutSize(&layoutW, &layoutH);
+#endif
+        jkHud_leftBlitX = 0;
+        jkHud_leftBlitY = layoutH - HUD_SCALED((*jkHud_pStatusLeftBm->mipSurfaces)->format.height);
+        v6 = *jkHud_pStatusRightBm->mipSurfaces;
+        jkHud_rightBlitX = layoutW - HUD_SCALED(v6->format.width);
+        jkHud_rightBlitY = layoutH - HUD_SCALED(v6->format.height);
+    }
     for (v7 = 0; v7 < 5; v7++)
     {
         jkHud_aTeamColors16bpp[v7] = stdColor_Indexed8ToRGB16(jkHud_aTeamColors8bpp[v7], Video_aPalette, &Video_format.format);

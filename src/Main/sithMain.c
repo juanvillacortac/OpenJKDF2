@@ -12,6 +12,9 @@
 #include "Win95/stdComm.h"
 #include "Devices/sithConsole.h"
 #include "Win95/Window.h"
+#if defined(TARGET_LINUX_GLES)
+#include "Platform/trace_gles.h"
+#endif
 #include "AI/sithAI.h"
 #include "AI/sithAIClass.h"
 #include "AI/sithAIAwareness.h"
@@ -128,9 +131,18 @@ void sithMain_Shutdown()
 
 int sithMain_Load(char *path)
 {
+#if defined(TARGET_LINUX_GLES)
+    openjkdf2_trace_fmt("sithMain_Load: enter %s", path ? path : "(null)");
+#endif
     sithWorld_pStatic = sithWorld_New();
     sithWorld_pStatic->level_type_maybe |= 1;
-    return sithWorld_Load(sithWorld_pStatic, path) != 0;
+    {
+        int ok = sithWorld_Load(sithWorld_pStatic, path) != 0;
+#if defined(TARGET_LINUX_GLES)
+        openjkdf2_trace_fmt("sithMain_Load: done ok=%d", ok);
+#endif
+        return ok;
+    }
 }
 
 void sithMain_Free()

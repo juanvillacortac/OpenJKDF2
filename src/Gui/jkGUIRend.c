@@ -248,6 +248,9 @@ void jkGuiRend_UpdateDrawMenu(jkGuiMenu *menu)
 
 void jkGuiRend_Paint(jkGuiMenu *menu)
 {
+    if (!menu) {
+        return;
+    }
 
     int32_t ret;
     
@@ -1827,8 +1830,9 @@ void jkGuiRend_FlipAndDraw(jkGuiMenu *menu, rdRect *drawRect)
         rectTmp.x = 0;
         rectTmp.y = 0;
         rect = &rectTmp;
-        rectTmp.width = stdDisplay_pCurVideoMode->format.width;
-        rectTmp.height = stdDisplay_pCurVideoMode->format.height;
+        stdDisplay_SyncMenuBufferFormat();
+        rectTmp.width = Video_menuBuffer.format.width ? Video_menuBuffer.format.width : 640;
+        rectTmp.height = Video_menuBuffer.format.height ? Video_menuBuffer.format.height : 480;
     }
     if ( stdDisplay_pCurDevice->video_device[0].windowedMaybe )
     {

@@ -213,7 +213,7 @@ static jkGuiElement jkGuiJoystick_aElements[33+3] = {
 };
 
 static jkGuiMenu jkGuiJoystick_menu = {
-  jkGuiJoystick_aElements, 0, 225, 255, 15, NULL, NULL, jkGui_stdBitmaps, jkGui_stdFonts, (intptr_t)jkGuiKeyboard_aIdk3, jkGuiJoystick_MenuTick, "thermloop01.wav", "thrmlpu2.wav", NULL, NULL, NULL, 0, NULL, NULL
+  jkGuiJoystick_aElements, 0, 225, 255, 15, NULL, NULL, jkGui_stdBitmaps, jkGui_stdFonts, 0, jkGuiJoystick_MenuTick, "thermloop01.wav", "thrmlpu2.wav", NULL, NULL, NULL, 0, NULL, NULL
 };  
 
 void jkGuiJoystick_nullsub_51()
@@ -1084,6 +1084,7 @@ int32_t jkGuiJoystick_Show()
     stdControlKeyInfoEntry *v1; // eax
     flex_d_t v2; // st7
 
+    jkGuiJoystick_menu.paddings = (intptr_t)jkGuiKeyboard_aIdk3;
     jkGuiJoystick_dword_557078 = stdControl_bOpen;
     jkGuiJoystick_dword_5576F4 = 0;
     jkGuiJoystick_bIsCapturingInputs = 0;

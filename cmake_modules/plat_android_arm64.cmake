@@ -24,8 +24,8 @@ macro(plat_initialize)
     include_directories(${PROJECT_SOURCE_DIR}/lib/freeglut/include)
     include_directories(${PROJECT_SOURCE_DIR}/lib/glew/include)
 
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -std=c11 -fshort-wchar -Werror=implicit-function-declaration -Wno-unused-variable -Wno-parentheses")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fshort-wchar")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -std=c11 -fshort-wchar -fno-builtin-wcslen -fno-builtin-wcslen -Werror=implicit-function-declaration -Wno-unused-variable -Wno-parentheses")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fshort-wchar -fno-builtin-wcslen -fno-builtin-wcslen")
     add_link_options(-fshort-wchar)
 endmacro()
 

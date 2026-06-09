@@ -2,8 +2,7 @@
 
 #include "SDL2_helper.h"
 
-#include <iostream>
-#include <fstream>
+#include <cstdio>
 #include <vector>
 #include <cstring>
 #include <stdlib.h>
@@ -16,6 +15,7 @@
 #include "General/md5.h"
 #include "Engine/rdMaterial.h"
 #include "Platform/std3D.h"
+#include "Win95/stdDisplay.h"
 #include "stdPlatform.h"
 #include "jk.h"
 
@@ -391,9 +391,21 @@ void jkgm_populate_cache()
 
         try
         {
-            std::ifstream i(metadata_path);
             nlohmann::json jkgm_metadata;
-            i >> jkgm_metadata;
+            FILE* meta_f = fopen(metadata_path.c_str(), "rb");
+            if (meta_f) {
+                if (fseek(meta_f, 0, SEEK_END) == 0) {
+                    long meta_sz = ftell(meta_f);
+                    if (meta_sz > 0 && fseek(meta_f, 0, SEEK_SET) == 0) {
+                        std::string meta_buf;
+                        meta_buf.resize((size_t)meta_sz);
+                        if (fread(meta_buf.data(), 1, (size_t)meta_sz, meta_f) == (size_t)meta_sz) {
+                            jkgm_metadata = nlohmann::json::parse(meta_buf);
+                        }
+                    }
+                }
+                fclose(meta_f);
+            }
        
             for (auto it : jkgm_metadata["materials"])
             {
@@ -489,20 +501,13 @@ void jkgm_populate_cache()
         }
         catch(nlohmann::json::parse_error& e)
         {
-            std::cout << "Parse error while reading metadata `" << metadata_path << "`:";
-            std::cout << "message: " << e.what() << '\n'
-                  << "exception id: " << e.id << '\n'
-                  << "byte position of error: " << e.byte << std::endl;
-
-            //found_replace = false;
+            stdPlatform_Printf("Parse error while reading metadata `%s`: %s (id=%d byte=%zu)\n",
+                metadata_path.c_str(), e.what(), e.id, e.byte);
         }
         catch(nlohmann::json::exception& e)
         {
-            std::cout << "Exception while parsing metadata `" << metadata_path << "`:";
-            std::cout << "message: " << e.what() << '\n'
-                  << "exception id: " << e.id << '\n' << std::endl;
-
-            //found_replace = false;
+            stdPlatform_Printf("Exception while parsing metadata `%s`: %s (id=%d)\n",
+                metadata_path.c_str(), e.what(), e.id);
         }
     }
     jkgm_cache_once = true;
@@ -512,8 +517,11 @@ std::string jkgm_get_tex_hash(stdVBuffer *vbuf, rdDDrawSurface *texture, rdMater
 {
     if (!vbuf || !texture) return "AAAAAAAAAA";
 
-    uint8_t* image_8bpp = (uint8_t*)vbuf->sdlSurface->pixels;
-    uint16_t* image_16bpp = (uint16_t*)vbuf->sdlSurface->pixels;
+    uint8_t* pixels = stdDisplay_VBufferPixels(vbuf);
+    if (!pixels) return "AAAAAAAAAA";
+
+    uint8_t* image_8bpp = pixels;
+    uint16_t* image_16bpp = (uint16_t*)pixels;
     uint8_t* pal = (uint8_t*)vbuf->palette;
     
     uint32_t width, height;
@@ -525,14 +533,23 @@ std::string jkgm_get_tex_hash(stdVBuffer *vbuf, rdDDrawSurface *texture, rdMater
     md5Update(&ctx, (uint8_t *)&width, sizeof(uint32_t));
     md5Update(&ctx, (uint8_t *)&height, sizeof(uint32_t));
 
+    const uint8_t *pal_src = (const uint8_t *)vbuf->palette;
+    static uint8_t fallback_pal[768];
+    if (!pal_src) {
+        pal_src = (const uint8_t *)worldpal_data;
+    }
+    if (!pal_src) {
+        pal_src = fallback_pal;
+    }
+
     if (!vbuf->format.format.is16bit)
     {
         for (int i = 0; i < width*height; i++)
         {
             uint8_t val = image_8bpp[i];
-            uint8_t b = ((uint8_t*)worldpal_data)[val*3];
-            uint8_t g = ((uint8_t*)worldpal_data)[(val*3)+1];
-            uint8_t r = ((uint8_t*)worldpal_data)[(val*3)+2];
+            uint8_t b = pal_src[val*3];
+            uint8_t g = pal_src[(val*3)+1];
+            uint8_t r = pal_src[(val*3)+2];
 
             if (is_alpha_tex) {
                 uint16_t rgb565 = (((b >> 3) & 0x1F)<<0) | (((g >> 2) & 0x3F)<<5) | (((r >> 3) & 0x1F) << (6+5));
@@ -558,6 +575,9 @@ std::string jkgm_get_tex_hash(stdVBuffer *vbuf, rdDDrawSurface *texture, rdMater
 
 void jkgm_populate_shortcuts(stdVBuffer *vbuf, rdDDrawSurface *texture, rdMaterial* material, int is_alpha_tex, int mipmap_level, int cel)
 {
+#if defined(TARGET_LINUX_GLES)
+    return;
+#endif
     if (Main_bHeadless) return;
     if (texture && texture->texture_loaded) return;
 

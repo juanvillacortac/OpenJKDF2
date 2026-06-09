@@ -19,11 +19,31 @@
 #include "Platform/GL/jkgm.h"
 
 #include "SDL2_helper.h"
+#include "Platform/trace_gles.h"
 
 #ifdef WIN32
 // Force Optimus/AMD to use non-integrated GPUs by default.
 __declspec(dllexport) DWORD NvOptimusEnablement = 1;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+#endif
+
+#if defined(TARGET_LINUX_GLES)
+extern SDL_Window *displayWindow;
+extern SDL_GLContext glWindowContext;
+
+static int std3D_EnsureGLContext(void)
+{
+    if (!displayWindow || !glWindowContext) {
+        openjkdf2_trace_fmt("std3D_EnsureGLContext: missing window=%p context=%p",
+            (void*)displayWindow, (void*)glWindowContext);
+        return 0;
+    }
+    if (SDL_GL_MakeCurrent(displayWindow, glWindowContext) != 0) {
+        openjkdf2_trace_fmt("std3D_EnsureGLContext: MakeCurrent failed: %s", SDL_GetError());
+        return 0;
+    }
+    return 1;
+}
 #endif
 
 #define TEX_MODE_TEST 0
@@ -189,14 +209,22 @@ void std3D_generateIntermediateFbo(int32_t width, int32_t height, std3DIntermedi
     // Set up our framebuffer texture
     glGenTextures(1, &pFbo->tex);
     glBindTexture(GL_TEXTURE_2D, pFbo->tex);
+#if defined(TARGET_LINUX_GLES)
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+#else
     glTexImage2D(GL_TEXTURE_2D, 0, isFloat ? GL_RGBA16F : GL_RGBA8, width, height, 0, GL_RGBA, isFloat ? GL_FLOAT : GL_UNSIGNED_BYTE, NULL);
+#endif
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+#if !defined(TARGET_LINUX_GLES)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
     glGenerateMipmap(GL_TEXTURE_2D);
+#else
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+#endif
     
     // Attach fbTex to our currently bound framebuffer fb
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pFbo->tex, 0);
@@ -249,15 +277,22 @@ void std3D_generateFramebuffer(int32_t width, int32_t height, std3DFramebuffer* 
     // Set up our emissive fb texture
     glGenTextures(1, &pFb->tex1);
     glBindTexture(GL_TEXTURE_2D, pFb->tex1);
+#if defined(TARGET_LINUX_GLES)
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+#else
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+#endif
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+#if !defined(TARGET_LINUX_GLES)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
     glGenerateMipmap(GL_TEXTURE_2D);
-    //glGenerateMipmap(GL_TEXTURE_2D);
+#else
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+#endif
     
     // Attach fbTex to our currently bound framebuffer fb
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, pFb->tex1, 0);
@@ -265,7 +300,11 @@ void std3D_generateFramebuffer(int32_t width, int32_t height, std3DFramebuffer* 
     // Set up our position fb texture
     glGenTextures(1, &pFb->tex2);
     glBindTexture(GL_TEXTURE_2D, pFb->tex2);
+#if defined(TARGET_LINUX_GLES)
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+#else
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+#endif
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -277,7 +316,11 @@ void std3D_generateFramebuffer(int32_t width, int32_t height, std3DFramebuffer* 
     // Set up our normal fb texture
     glGenTextures(1, &pFb->tex3);
     glBindTexture(GL_TEXTURE_2D, pFb->tex3);
+#if defined(TARGET_LINUX_GLES)
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+#else
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+#endif
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -452,24 +495,51 @@ bool std3D_loadSimpleTexProgram(const char* fpath_base, std3DSimpleTexStage* pOu
 int init_resources()
 {
     stdPlatform_Printf("std3D: OpenGL init...\n");
+    openjkdf2_trace("init_resources: enter");
+
+#if defined(TARGET_LINUX_GLES)
+    if (!std3D_EnsureGLContext()) {
+        openjkdf2_trace("init_resources: no GL context");
+        return false;
+    }
+    openjkdf2_trace("init_resources: GL context current");
+    {
+        const GLubyte *ver = glGetString(GL_VERSION);
+        const GLubyte *renderer = glGetString(GL_RENDERER);
+        openjkdf2_trace_fmt("init_resources: GL_VERSION=%s", ver ? (const char*)ver : "null");
+        openjkdf2_trace_fmt("init_resources: GL_RENDERER=%s", renderer ? (const char*)renderer : "null");
+    }
+#endif
 
     std3D_bReinitHudElements = 1;
 
     memset(std3D_aUITextures, 0, sizeof(std3D_aUITextures));
+    openjkdf2_trace("init_resources: after memset");
 
+#if defined(TARGET_LINUX_GLES)
+    // KMSDRM/Mali: default framebuffer is 0; glGetIntegerv can crash on some drivers
+    std3D_windowFbo = 0;
+    openjkdf2_trace("init_resources: window fbo=0 (GLES)");
+#else
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &std3D_windowFbo);
+    openjkdf2_trace("init_resources: got window fbo");
+#endif
 
     int32_t tex_w = Window_xSize;
     int32_t tex_h = Window_ySize;
 
     std3D_generateFramebuffer(tex_w, tex_h, &std3D_framebuffers[0]);
+    openjkdf2_trace("init_resources: framebuffer 0 ok");
     std3D_generateFramebuffer(tex_w, tex_h, &std3D_framebuffers[1]);
+    openjkdf2_trace("init_resources: framebuffers ok");
 
     std3D_activeFb = 1;
     std3D_pFb = &std3D_framebuffers[0];
     
     if ((programDefault = std3D_loadProgram("shaders/default")) == 0) return false;
+    openjkdf2_trace("init_resources: shader default ok");
     if ((programMenu = std3D_loadProgram("shaders/menu")) == 0) return false;
+    openjkdf2_trace("init_resources: shader menu ok");
     if (!std3D_loadSimpleTexProgram("shaders/ui", &std3D_uiProgram)) return false;
     if (!std3D_loadSimpleTexProgram("shaders/texfbo", &std3D_texFboStage)) return false;
     if (!std3D_loadSimpleTexProgram("shaders/blur", &std3D_blurStage)) return false;
@@ -638,6 +708,7 @@ int init_resources()
     glGenBuffers(1, &menu_ibo_triangle);
 
     has_initted = true;
+    openjkdf2_trace("init_resources: done");
     return true;
 }
 
@@ -674,6 +745,14 @@ void std3D_Shutdown()
 
 void std3D_FreeResources()
 {
+    if (!has_initted) {
+        return;
+    }
+
+#if defined(TARGET_LINUX_GLES)
+    std3D_EnsureGLContext();
+#endif
+
     std3D_PurgeEntireTextureCache();
 
     glDeleteProgram(programDefault);
@@ -734,11 +813,16 @@ int std3D_StartScene()
 {
     if (Main_bHeadless) return 1;
 
+#if defined(TARGET_LINUX_GLES)
+    std3D_EnsureGLContext();
+#endif
+
     ++std3D_frameCount;
 
     //printf("Begin draw\n");
     if (!has_initted)
     {
+        openjkdf2_trace("std3D_StartScene: init_resources");
         if (!init_resources()) {
             stdPlatform_Printf("std3D: Failed to init resources, exiting...");
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Failed to init resources, exiting...", NULL);
@@ -1081,6 +1165,11 @@ void std3D_DrawMenu()
 {
     if (Main_bHeadless) return;
 
+#if defined(TARGET_LINUX_GLES)
+    stdDisplay_EnsureMenuGLTextures();
+#endif
+    stdDisplay_SyncMenuBufferFormat();
+
     //printf("Draw menu\n");
     std3D_DrawSceneFbo();
     //glFlush();
@@ -1110,8 +1199,8 @@ void std3D_DrawMenu()
         //menu_h = 480.0;
 
         // Stretch screen
-        menu_u = (1.0 / Video_menuBuffer.format.width) * 640.0;
-        menu_v = (1.0 / Video_menuBuffer.format.height) * 480.0;
+        menu_u = 1.0;
+        menu_v = 1.0;
 
         // Keep 4:3 aspect
         menu_x = (menu_w - (menu_h * (640.0 / 480.0))) / 2.0;
@@ -1140,8 +1229,8 @@ void std3D_DrawMenu()
         bFixHudScale = 1;
 
         // Stretch screen
-        menu_u = (1.0 / Video_menuBuffer.format.width) * 640.0;
-        menu_v = (1.0 / Video_menuBuffer.format.height) * 480.0;
+        menu_u = 1.0;
+        menu_v = 1.0;
 
         // Keep 4:3 aspect
         menu_x = (menu_w - (menu_h * (640.0 / 480.0))) / 2.0;
@@ -1298,8 +1387,10 @@ void std3D_DrawMenu()
         std3D_DrawMenuSubrect(0, menu_h - 64, 64, 64, 0, Window_ySize - 64*hudScale, hudScale);
         std3D_DrawMenuSubrect(menu_w - 64, menu_h - 64, 64, 64, Window_xSize - 64*hudScale, Window_ySize - 64*hudScale, hudScale);
 
-        // Items
+#if !defined(TARGET_LINUX_GLES)
+        // Items (inventory is drawn via std3D_DrawUIBitmap on GLES)
         std3D_DrawMenuSubrect((menu_w / 2) - 128, menu_h - 64, 256, 64, (Window_xSize / 2) - (128*hudScale), Window_ySize - 64*hudScale, hudScale);
+#endif
 
         // Text
         float textScale = hudScale;
@@ -1328,7 +1419,14 @@ void std3D_DrawMenu()
     
     glActiveTexture(GL_TEXTURE0 + 0);
     glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, Video_menuBuffer.format.width, Video_menuBuffer.format.height, GL_RED, GL_UNSIGNED_BYTE, Video_menuBuffer.sdlSurface->pixels);
+    {
+        uint8_t *menuPixels = stdDisplay_VBufferPixels(&Video_menuBuffer);
+        if (menuPixels) {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, Video_menuBuffer.format.width);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, Video_menuBuffer.format.width, Video_menuBuffer.format.height, GL_RED, GL_UNSIGNED_BYTE, menuPixels);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        }
+    }
 
     //GLushort data_elements[32 * 3];
     glActiveTexture(GL_TEXTURE0 + 1);
@@ -1477,7 +1575,7 @@ void std3D_DrawMapOverlay()
     
     glActiveTexture(GL_TEXTURE0 + 0);
     glBindTexture(GL_TEXTURE_2D, Video_overlayTexId);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, Video_overlayMapBuffer.format.width, Video_overlayMapBuffer.format.height, GL_RED, GL_UNSIGNED_BYTE, Video_overlayMapBuffer.sdlSurface->pixels);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, Video_overlayMapBuffer.format.width, Video_overlayMapBuffer.format.height, GL_RED, GL_UNSIGNED_BYTE, stdDisplay_VBufferPixels(&Video_overlayMapBuffer));
 
     glActiveTexture(GL_TEXTURE0 + 1);
     glBindTexture(GL_TEXTURE_2D, displaypal_texture);
@@ -2879,6 +2977,17 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
     if (!vbuf || !texture) return 1;
     if (texture->texture_loaded) return 1;
 
+#if defined(TARGET_LINUX_GLES)
+    if (!has_initted) {
+        openjkdf2_trace("std3D_AddToTextureCache: GL not initted yet");
+        return 0;
+    }
+    if (!std3D_EnsureGLContext()) {
+        openjkdf2_trace("std3D_AddToTextureCache: no GL context");
+        return 0;
+    }
+#endif
+
     if (std3D_loadedTexturesAmt >= STD3D_MAX_TEXTURES) {
         stdPlatform_Printf("ERROR: Texture cache exhausted!! Ask ShinyQuagsire to increase the size.\n");
         return 1;
@@ -2887,13 +2996,17 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
     
     GLuint image_texture;
     glGenTextures(1, &image_texture);
-    uint8_t* image_8bpp = (uint8_t*)vbuf->sdlSurface->pixels;
-    uint16_t* image_16bpp = (uint16_t*)vbuf->sdlSurface->pixels;
+    uint8_t* image_8bpp = stdDisplay_VBufferPixels(vbuf);
+    uint16_t* image_16bpp = (uint16_t*)image_8bpp;
     uint8_t* pal = (uint8_t*)vbuf->palette;
     
     uint32_t width, height;
     width = vbuf->format.width;
     height = vbuf->format.height;
+
+    if (!image_8bpp) {
+        return 1;
+    }
 
     glBindTexture(GL_TEXTURE_2D, image_texture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -2921,7 +3034,76 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
     if (vbuf->format.format.is16bit)
     {
         texture->is_16bit = 1;
-#if 1
+#if defined(TARGET_LINUX_GLES)
+        {
+            uint32_t row_stride = vbuf->format.width_in_bytes / 2;
+            uint32_t tex_width = width;
+            uint32_t tex_height = height;
+            uint32_t tex_row_stride = width;
+            void* image_data = malloc(tex_width * tex_height * 4);
+            if (!image_data) {
+                return 0;
+            }
+            memset(image_data, 0, tex_width * tex_height * 4);
+
+            for (uint32_t j = 0; j < height; j++)
+            {
+                for (uint32_t i = 0; i < width; i++)
+                {
+                    uint32_t src_index = (j * row_stride) + i;
+                    uint32_t tex_index = (j * tex_row_stride) + i;
+                    uint32_t val_rgba = 0x00000000;
+                    uint16_t val = image_16bpp[src_index];
+
+                    if (vbuf->format.format.r_bits == 5 && vbuf->format.format.g_bits == 6 && vbuf->format.format.b_bits == 5)
+                    {
+                        uint8_t val_a8 = 0xFF;
+                        uint8_t val_r5 = (val >> 11) & 0x1F;
+                        uint8_t val_g6 = (val >> 5) & 0x3F;
+                        uint8_t val_b5 = (val >> 0) & 0x1F;
+                        uint8_t val_r8 = (val_r5 * 527 + 23) >> 6;
+                        uint8_t val_g8 = (val_g6 * 259 + 33) >> 6;
+                        uint8_t val_b8 = (val_b5 * 527 + 23) >> 6;
+
+                        if (vbuf->transparent_color) {
+                            uint8_t transparent_r5 = (vbuf->transparent_color >> 11) & 0x1F;
+                            uint8_t transparent_g6 = (vbuf->transparent_color >> 5) & 0x3F;
+                            uint8_t transparent_b5 = (vbuf->transparent_color >> 0) & 0x1F;
+                            if (val_r5 == transparent_r5 && val_g6 == transparent_g6 && val_b5 == transparent_b5) {
+                                val_a8 = 0;
+                            }
+                        }
+
+                        val_rgba |= (val_a8 << 24);
+                        val_rgba |= (val_b8 << 16);
+                        val_rgba |= (val_g8 << 8);
+                        val_rgba |= (val_r8 << 0);
+                    }
+                    else if (vbuf->format.format.r_bits == 5 && vbuf->format.format.g_bits == 5 && vbuf->format.format.b_bits == 5)
+                    {
+                        uint8_t val_a1 = (val >> 15);
+                        uint8_t val_r5 = (val >> 10) & 0x1F;
+                        uint8_t val_g5 = (val >> 5) & 0x1F;
+                        uint8_t val_b5 = (val >> 0) & 0x1F;
+                        uint8_t val_a8 = val_a1 ? 0xFF : 0x0;
+                        uint8_t val_r8 = (val_r5 * 527 + 23) >> 6;
+                        uint8_t val_g8 = (val_g5 * 527 + 23) >> 6;
+                        uint8_t val_b8 = (val_b5 * 527 + 23) >> 6;
+
+                        val_rgba |= (val_a8 << 24);
+                        val_rgba |= (val_b8 << 16);
+                        val_rgba |= (val_g8 << 8);
+                        val_rgba |= (val_r8 << 0);
+                    }
+
+                    ((uint32_t*)image_data)[tex_index] = val_rgba;
+                }
+            }
+
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+            texture->pDataDepthConverted = image_data;
+        }
+#else
         if (!is_alpha_tex)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0,  GL_RGB, GL_UNSIGNED_SHORT_5_6_5_REV, image_8bpp);
         else
@@ -3030,7 +3212,13 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
         texture->pDataDepthConverted = image_data;
 #endif
         texture->is_16bit = 0;
+#if defined(TARGET_LINUX_GLES)
+        if (vbuf->format.width_in_bytes != width) {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, vbuf->format.width_in_bytes);
+        }
+#endif
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, image_8bpp);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
         texture->pDataDepthConverted = NULL;
     }
@@ -3078,6 +3266,12 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
 {
     if (Main_bHeadless) return 1;
     if (!has_initted) return 0;
+#if defined(TARGET_LINUX_GLES)
+    if (!std3D_EnsureGLContext()) {
+        openjkdf2_trace("std3D_AddBitmapToTextureCache: no GL context");
+        return 0;
+    }
+#endif
     if (!texture) return 1;
     if (mipIdx >= texture->numMips) return 1;
     if (!texture->abLoadedToGPU || texture->abLoadedToGPU[mipIdx]) return 1;
@@ -3094,13 +3288,17 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
     
     GLuint image_texture;
     glGenTextures(1, &image_texture);
-    uint8_t* image_8bpp = (uint8_t*)vbuf->sdlSurface->pixels;
-    uint16_t* image_16bpp = (uint16_t*)vbuf->sdlSurface->pixels;
+    uint8_t* image_8bpp = stdDisplay_VBufferPixels(vbuf);
+    uint16_t* image_16bpp = (uint16_t*)image_8bpp;
     uint8_t* pal = (uint8_t*)vbuf->palette;
     
     uint32_t width, height;
     width = vbuf->format.width;
     height = vbuf->format.height;
+
+    if (!image_8bpp) {
+        return 1;
+    }
 
     glBindTexture(GL_TEXTURE_2D, image_texture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -3622,6 +3820,13 @@ void std3D_PurgeEntireTextureCache()
         std3D_loadedTexturesAmt = 0;
         return;
     }
+
+#if defined(TARGET_LINUX_GLES)
+    if (!has_initted || !std3D_EnsureGLContext()) {
+        std3D_loadedTexturesAmt = 0;
+        return;
+    }
+#endif
 
     if (!std3D_loadedTexturesAmt) {
         jk_printf("Skipping texture cache purge, nothing loaded.\n");

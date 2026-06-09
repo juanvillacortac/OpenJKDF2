@@ -306,6 +306,24 @@ int stdControl_EnableAxis(unsigned int idx)
 
 // readcontrols
 
+#if defined(TARGET_LINUX_GLES)
+static int stdControl_MirrorJoy1KeyToJoy2(int keyNum)
+{
+    if (keyNum >= KEY_JOY1_B1 && keyNum < KEY_MOUSE_STARTIDX)
+        return keyNum + JK_JOYSTICK_BUTTON_STRIDE;
+#if JK_NUM_EXT_JOY_BUTTONS
+    if (keyNum >= KEY_JOY1_B9 && keyNum <= KEY_JOY1_B32)
+        return keyNum + JK_JOYSTICK_EXT_BUTTON_STRIDE;
+#endif
+    return -1;
+}
+
+static int stdControl_ShouldMirrorExtraJoypads(void)
+{
+    return !sithNet_isMulti;
+}
+#endif
+
 flex_t stdControl_ReadAxis(int axisNum)
 {
     flex_t result; // st7
@@ -358,6 +376,15 @@ flex_t stdControl_ReadAxis(int axisNum)
 
     // Added: Scale to FPS
     //result = (result * (sithTime_TickHz / 50.0));
+#if defined(TARGET_LINUX_GLES)
+    if (stdControl_ShouldMirrorExtraJoypads() && axisNum < JK_JOYSTICK_AXIS_STRIDE && stdControl_aJoystickExists[1]) {
+        flex_t alt = stdControl_ReadAxis(axisNum + JK_JOYSTICK_AXIS_STRIDE);
+        flex_t absAlt = alt < 0.0 ? -alt : alt;
+        flex_t absResult = result < 0.0 ? -result : result;
+        if (absAlt > absResult)
+            result = alt;
+    }
+#endif
     return result;
 }
 
@@ -459,6 +486,20 @@ int stdControl_ReadKey(int keyNum, int *pOut)
                 stdControl_bControlsIdle = 0;
         }
         result = stdControl_aKeyInfo[keyNum];
+#if defined(TARGET_LINUX_GLES)
+        if (stdControl_ShouldMirrorExtraJoypads()) {
+            int mirrorKey = stdControl_MirrorJoy1KeyToJoy2(keyNum);
+            if (mirrorKey >= 0) {
+                if (pOut)
+                    *pOut += stdControl_aInput2[mirrorKey];
+                if (stdControl_aKeyInfo[mirrorKey]) {
+                    if (stdControl_bControlsIdle)
+                        stdControl_bControlsIdle = 0;
+                    result = 1;
+                }
+            }
+        }
+#endif
     }
     return result;
 }

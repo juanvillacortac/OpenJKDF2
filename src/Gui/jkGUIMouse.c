@@ -95,7 +95,7 @@ static jkGuiElement jkGuiMouse_aElements[26] =
     {ELEMENT_END,         0,   0, NULL,                     0, {0}, 0, 0, NULL, NULL, NULL, NULL, {0}, 0},
 };
 
-static jkGuiMenu jkGuiMouse_menu = {jkGuiMouse_aElements, 0, 225, 255, 15, NULL, NULL, jkGui_stdBitmaps, jkGui_stdFonts, (intptr_t)&jkGUIMouse_listbox_paddings, NULL, "thermloop01.wav", "thrmlpu2.wav", 0, 0, 0, 0, 0, 0};
+static jkGuiMenu jkGuiMouse_menu = {jkGuiMouse_aElements, 0, 225, 255, 15, NULL, NULL, jkGui_stdBitmaps, jkGui_stdFonts, 0, NULL, "thermloop01.wav", "thrmlpu2.wav", 0, 0, 0, 0, 0, 0};
 
 void jkGuiMouse_SensitivityDraw(jkGuiElement *element, jkGuiMenu *menu, stdVBuffer *vbuf, BOOL redraw)
 {
@@ -655,6 +655,7 @@ int jkGuiMouse_Show()
     jkGuiMouseSubEntry *pSubEnt; // eax
     flex_d_t v2; // st7
 
+    jkGuiMouse_menu.paddings = (intptr_t)&jkGUIMouse_listbox_paddings;
     jkGuiMouse_bOpen = stdControl_bOpen;
     jkGuiRend_DarrayNewStr(&jkGuiMouse_Darray_5566B8, 64, 1);
     jkGuiRend_DarrayNewStr(&jkGuiMouse_Darray_556698, 64, 1);

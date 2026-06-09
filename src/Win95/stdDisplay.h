@@ -104,6 +104,10 @@ void stdDisplay_ddraw_surface_flip2();
 void stdDisplay_RestoreDisplayMode();
 stdVBuffer* stdDisplay_VBufferConvertColorFormat(void* a, stdVBuffer* b);
 int stdDisplay_GammaCorrect3(int a1);
+void stdDisplay_SyncMenuBufferFormat(void);
+/* GLES: buffers 8bpp usan surface_lock_alloc (sdlSurface=NULL). Usar siempre esto para pixels. */
+uint8_t* stdDisplay_VBufferPixels(stdVBuffer *vbuf);
+int stdDisplay_EnsureMenuGLTextures(void);
 
 int stdDisplay_SetCooperativeLevel(uint32_t a);
 int stdDisplay_DrawAndFlipGdi(uint32_t a);

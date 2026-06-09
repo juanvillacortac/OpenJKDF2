@@ -1,6 +1,7 @@
 #include "jkPlayer.h"
 
 #include <math.h>
+#include <stdlib.h>
 #include "General/stdString.h"
 #include "General/stdFnames.h"
 #include "General/stdFileUtil.h"
@@ -32,6 +33,7 @@
 #include "General/stdJSON.h"
 #include "Platform/std3D.h"
 #include "Main/sithCvar.h"
+#include "Main/jkHud.h"
 
 // DSi has *plenty* of time to read the text.
 #ifdef TARGET_TWL
@@ -207,6 +209,97 @@ void jkPlayer_StartupVars()
 }
 
 // Added: Clean reset
+#if defined(TARGET_LINUX_GLES)
+static void jkPlayer_SyncGlesHudLayout(void)
+{
+    const int layoutW = 640;
+    const int layoutH = 480;
+    int vsIdx = Video_modeStruct.viewSizeIdx;
+
+    if (vsIdx < 0 || vsIdx >= 11)
+        vsIdx = 5;
+
+    Video_modeStruct.aViewSizes[vsIdx].xMin = layoutW;
+    Video_modeStruct.aViewSizes[vsIdx].yMin = layoutH;
+    Video_modeStruct.aViewSizes[vsIdx].xMax = layoutW / 2;
+    Video_modeStruct.aViewSizes[vsIdx].yMax = layoutH / 2;
+
+    if (stdDisplay_pCurVideoMode) {
+        stdDisplay_pCurVideoMode->format.width = layoutW;
+        stdDisplay_pCurVideoMode->format.height = layoutH;
+        stdDisplay_pCurVideoMode->widthMaybe = layoutW;
+        stdDisplay_pCurVideoMode->format.width_in_pixels = layoutW;
+        stdDisplay_pCurVideoMode->format.width_in_bytes = layoutW;
+    }
+
+    Video_format.width = layoutW;
+    Video_format.height = layoutH;
+}
+
+void jkPlayer_ApplyGlesHandheldDefaults(void)
+{
+    const char *ssaa_env = getenv("OPENJKDF2_SSAA");
+    const char *hud_env = getenv("OPENJKDF2_HUD_SCALE");
+
+    jkPlayer_enableBloom = 0;
+    jkPlayer_enableSSAO = 0;
+    jkPlayer_enableTextureFilter = 0;
+    jkPlayer_bEnableJkgm = 0;
+    jkPlayer_bEnableTexturePrecache = 0;
+
+    if (ssaa_env && ssaa_env[0]) {
+        float v = (float)atof(ssaa_env);
+        if (v >= 0.25f && v <= 1.0f) {
+            jkPlayer_ssaaMultiple = v;
+        }
+    } else if (jkPlayer_ssaaMultiple > 0.75f) {
+        jkPlayer_ssaaMultiple = 0.75f;
+    }
+
+    if (!getenv("OPENJKDF2_VSYNC")) {
+        jkPlayer_enableVsync = 0;
+    }
+
+    /* Perfiles de PC suelen traer hudScale=2; en 720x480 desborda el HUD derecho. */
+    if (hud_env && hud_env[0]) {
+        float v = (float)atof(hud_env);
+        if (v >= 0.5f && v <= 2.0f) {
+            jkPlayer_hudScale = v;
+        }
+    } else if (Window_ySize > 0) {
+        jkPlayer_hudScale = (float)Window_ySize / 480.0f;
+        if (jkPlayer_hudScale < 0.5f)
+            jkPlayer_hudScale = 0.5f;
+        if (jkPlayer_hudScale > 1.5f)
+            jkPlayer_hudScale = 1.5f;
+    } else {
+        jkPlayer_hudScale = 1.0f;
+    }
+
+    jkPlayer_crosshairScale = 1.0f;
+    jkPlayer_crosshairLineWidth = 1.0f;
+    jkPlayer_SyncGlesHudLayout();
+
+    {
+        tSithCvar *hudCvar = sithCvar_Find("hud_scale");
+        if (hudCvar) {
+            hudCvar->flexVal = jkPlayer_hudScale;
+            if (hudCvar->pLinkPtr)
+                *(flex_t *)hudCvar->pLinkPtr = jkPlayer_hudScale;
+        }
+    }
+
+    if (jkHud_bOpened) {
+        jkHud_Close();
+        jkHud_Open();
+    }
+
+    if (jkHudInv_font) {
+        jkHudInv_LoadItemRes();
+    }
+}
+#endif
+
 void jkPlayer_ResetVars()
 {
 #ifdef QOL_IMPROVEMENTS
@@ -219,15 +312,32 @@ void jkPlayer_ResetVars()
     jkPlayer_enableBloom = 0;
     jkPlayer_enableSSAO = 0;
     jkPlayer_fpslimit = 0;
+#if defined(TARGET_LINUX_GLES)
+    jkPlayer_enableVsync = 0;
+    jkPlayer_ssaaMultiple = 0.75;
+    jkPlayer_hudScale = 1.0;
+#else
     jkPlayer_enableVsync = 1;
     jkPlayer_ssaaMultiple = 1.0;
+#endif
     jkPlayer_gamma = 1.0;
+#if defined(TARGET_LINUX_GLES)
+    jkPlayer_bEnableJkgm = 0;
+#else
     jkPlayer_bEnableJkgm = 1;
+#endif
+#if defined(TARGET_LINUX_GLES)
+    /* 2GB handheld: no precargar cientos de texturas GL durante sithWorld_Load */
+    jkPlayer_bEnableTexturePrecache = 0;
+#else
     jkPlayer_bEnableTexturePrecache = 1;
+#endif
     jkPlayer_bKeepCorpses = 0;
     jkPlayer_bFastMissionText = 0;
     jkPlayer_bUseOldPlayerPhysics = 0;
+#if !defined(TARGET_LINUX_GLES)
     jkPlayer_hudScale = 2.0;
+#endif
     jkPlayer_crosshairLineWidth = 1.0;
     jkPlayer_crosshairScale = 1.0;
     jkPlayer_canonicalCogTickrate = CANONICAL_COG_TICKRATE;
@@ -236,6 +346,10 @@ void jkPlayer_ResetVars()
     jkPlayer_setCrosshairOnLightsaber = 1;
     jkPlayer_setCrosshairOnFist = 1;
     jkPlayer_bDisableWeaponWaggle = 0;
+
+#if defined(TARGET_LINUX_GLES)
+    jkPlayer_ApplyGlesHandheldDefaults();
+#endif
 
     jkPlayer_bHasLoadedSettingsOnce = 0;
 #endif
@@ -264,8 +378,13 @@ int jkPlayer_LoadAutosave()
 
 int jkPlayer_LoadSave(char *path)
 {
+    int result;
     jkPlayer_bLoadingSomething = 1;
-    return sithGamesave_Load(path, 0, 1);
+    result = sithGamesave_Load(path, 0, 1);
+#if defined(TARGET_LINUX_GLES)
+    jkPlayer_ApplyGlesHandheldDefaults();
+#endif
+    return result;
 }
 
 void jkPlayer_Startup()
@@ -537,7 +656,7 @@ void jkPlayer_WriteConf(wchar_t *name)
     nameTmp[31] = 0;
     stdFnames_MakePath3(ext_fpath, 256, "player", nameTmp, "openjkdf2.json"); // Added
     stdFnames_MakePath3(ext_fpath_cvars, 256, "player", nameTmp, SITHCVAR_FNAME); // Added
-    stdString_snprintf(fpath, 128, "player\\%s\\%s.plr", nameTmp, nameTmp);
+    stdString_snprintf(fpath, 128, "player%c%s%c%s.plr", LEC_PATH_SEPARATOR_CHR, nameTmp, LEC_PATH_SEPARATOR_CHR, nameTmp);
     if ( stdConffile_OpenWriteBypass(fpath) )
     {
         stdConffile_Printf("version %d\n", 1);
@@ -700,7 +819,7 @@ int jkPlayer_ReadConf(wchar_t *name)
     jkPlayer_playerShortName[31] = 0;
     stdFnames_MakePath3(ext_fpath, 256, "player", v6, "openjkdf2.json");
     stdFnames_MakePath3(ext_fpath_cvars, 256, "player", v6, SITHCVAR_FNAME); // Added
-    stdString_snprintf(fpath, 256, "player\\%s\\%s.plr", v6, v6); // Added: sprintf -> snprintf
+    stdString_snprintf(fpath, 256, "player%c%s%c%s.plr", LEC_PATH_SEPARATOR_CHR, v6, LEC_PATH_SEPARATOR_CHR, v6);
     if (!stdConffile_OpenReadBypass(fpath))
         return 0;
 
@@ -767,9 +886,11 @@ int jkPlayer_ReadConf(wchar_t *name)
         jkPlayer_bEnableTexturePrecache = stdJSON_GetBool(ext_fpath, "bEnableTexturePrecache", jkPlayer_bEnableTexturePrecache);
         jkPlayer_bKeepCorpses = stdJSON_GetBool(ext_fpath, "bKeepCorpses", jkPlayer_bKeepCorpses);
         jkPlayer_bFastMissionText = stdJSON_GetBool(ext_fpath, "bFastMissionText", jkPlayer_bFastMissionText);
+#if !defined(TARGET_LINUX_GLES)
         jkPlayer_hudScale = stdJSON_GetFloat(ext_fpath, "hudScale", jkPlayer_hudScale);
         jkPlayer_crosshairLineWidth = stdJSON_GetFloat(ext_fpath, "crosshairLineWidth", jkPlayer_crosshairLineWidth);
         jkPlayer_crosshairScale = stdJSON_GetFloat(ext_fpath, "crosshairScale", jkPlayer_crosshairScale);
+#endif
         jkPlayer_canonicalCogTickrate = stdJSON_GetFloat(ext_fpath, "canonicalCogTickrate", jkPlayer_canonicalCogTickrate);
         jkPlayer_canonicalPhysTickrate = stdJSON_GetFloat(ext_fpath, "canonicalPhysTickrate", jkPlayer_canonicalPhysTickrate);
 
@@ -794,6 +915,9 @@ int jkPlayer_ReadConf(wchar_t *name)
         Window_SetHiDpi(Window_isHiDpi_tmp);
         Window_SetFullscreen(Window_isFullscreen_tmp);
 
+#if defined(TARGET_LINUX_GLES)
+        jkPlayer_ApplyGlesHandheldDefaults();
+#endif
         std3D_UpdateSettings();
 
         jkPlayer_bHasLoadedSettingsOnce = 1;

@@ -42,7 +42,7 @@ static jkGuiElement jkGuiKeyboard_aElements[19] =
 };
 
 
-static jkGuiMenu jkGuiKeyboard_menu = {jkGuiKeyboard_aElements, 0, 225, 255, 15, 0, 0, jkGui_stdBitmaps, jkGui_stdFonts, (intptr_t)jkGuiKeyboard_listbox_paddings, jkGuiKeyboard_sub_4123C0, "thermloop01.wav", "thrmlpu2.wav", 0, 0, 0, 0, 0, 0};
+static jkGuiMenu jkGuiKeyboard_menu = {jkGuiKeyboard_aElements, 0, 225, 255, 15, 0, 0, jkGui_stdBitmaps, jkGui_stdFonts, 0, jkGuiKeyboard_sub_4123C0, "thermloop01.wav", "thrmlpu2.wav", 0, 0, 0, 0, 0, 0};
 
 const char* jkGuiKeyboard_DIKNumToStr(uint32_t idx, char bIsIdxAxis)
 {
@@ -520,6 +520,7 @@ int jkGuiKeyboard_Show()
     jkGuiStringEntry *v2; // esi
     jkGuiKeyboardEntry *v3; // eax
 
+    jkGuiKeyboard_menu.paddings = (intptr_t)jkGuiKeyboard_listbox_paddings;
     jkGuiKeyboard_dword_555DE0 = stdControl_bOpen;
     jkGuiKeyboard_bOnceIdk = 0;
     jkGuiKeyboard_dword_555E10 = 105;

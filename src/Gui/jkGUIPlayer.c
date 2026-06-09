@@ -41,7 +41,7 @@ static jkGuiElement jkGuiPlayer_menuSelectElements[8] = {
     {ELEMENT_END, 0, 0, 0, 0, {0}, 0, 0, 0, 0, 0, 0, {0}, 0},
 };
 
-static jkGuiMenu jkGuiPlayer_menuSelect = {jkGuiPlayer_menuSelectElements, 0, 0xFFFF, 0xFFFF, 0xF, 0, 0, jkGui_stdBitmaps, jkGui_stdFonts, (intptr_t)jkGuiPlayer_menuSelectIdk, 0, "thermloop01.wav", "thrmlpu2.wav", 0, 0, 0, 0, 0,0};
+static jkGuiMenu jkGuiPlayer_menuSelect = {jkGuiPlayer_menuSelectElements, 0, 0xFFFF, 0xFFFF, 0xF, 0, 0, jkGui_stdBitmaps, jkGui_stdFonts, 0, 0, "thermloop01.wav", "thrmlpu2.wav", 0, 0, 0, 0, 0,0};
 
 static jkGuiElement jkGuiPlayer_menuNewElements[12] = {
     { ELEMENT_TEXT, 0, 0, 0, 3, {0, 410, 280, 14}, 1, 0, 0, 0, 0, 0, {0}, 0},
@@ -62,6 +62,7 @@ static jkGuiMenu jkGuiPlayer_menuNew = {jkGuiPlayer_menuNewElements, 0, 0xFFFF, 
 
 int jkGuiPlayer_Startup()
 {
+    jkGuiPlayer_menuSelect.paddings = (intptr_t)jkGuiPlayer_menuSelectIdk;
     jkGui_InitMenu(&jkGuiPlayer_menuSelect, jkGui_stdBitmaps[JKGUI_BM_BK_MAIN]);
     jkGui_InitMenu(&jkGuiPlayer_menuNew, jkGui_stdBitmaps[JKGUI_BM_BK_MAIN]);
 
@@ -214,8 +215,6 @@ void jkGuiPlayer_ShowNewPlayer(int a1)
     wchar_t a2[256]; // [esp+274h] [ebp-400h] BYREF
     wchar_t v24[256]; // [esp+474h] [ebp-200h] BYREF
 
-    jkPlayer_playerShortName[0] = 0; // Added
-
     v15 = 0; 
     jkGuiRend_DarrayNewStr(&a1a, 5, 1);
     do
@@ -243,7 +242,10 @@ void jkGuiPlayer_ShowNewPlayer(int a1)
             _memset(a2, 0, sizeof(a2));
             v4 = v3->str;
             v5 = __wcschr(v3->str, '\t');
-            __wcsncpy(a2, v4, v5 - v4);
+            if ( v5 )
+                stdString_SafeWStrCopy(a2, v4, (uint32_t)(v5 - v4 + 1));
+            else
+                stdString_SafeWStrCopy(a2, v4, 256);
         }
         switch ( v2 )
         {
@@ -256,7 +258,10 @@ void jkGuiPlayer_ShowNewPlayer(int a1)
                         _memset(a2, 0, sizeof(a2));
                         v12 = v11->str;
                         v13 = __wcschr(v11->str, '\t');
-                        __wcsncpy(a2, v12, v13 - v12);
+                        if ( v13 )
+                            stdString_SafeWStrCopy(a2, v12, (uint32_t)(v13 - v12 + 1));
+                        else
+                            stdString_SafeWStrCopy(a2, v12, 256);
                     }
                     if ( !jkPlayer_ReadConf(a2) )
                     {
@@ -277,7 +282,13 @@ void jkGuiPlayer_ShowNewPlayer(int a1)
             case 2:
                 jkGuiPlayer_menuNewElements[9].bIsVisible = v15 == 0;
                 jkGuiPlayer_menuNewElements[3].wstr = jkGuiPlayer_awTmp_555D28;
+#if defined(TARGET_LINUX_GLES)
+                stdString_CharToWchar(jkGuiPlayer_awTmp_555D28, "Jedi", 15);
+                jkGuiPlayer_awTmp_555D28[15] = 0;
+                jkGuiPlayer_menuNewElements[3].texInfo.textHeight = _wcslen(jkGuiPlayer_awTmp_555D28);
+#else
                 _memset(jkGuiPlayer_awTmp_555D28, 0, 16 * sizeof(wchar_t));
+#endif
                 jkGuiPlayer_menuNewElements[3].selectedTextEntry = 16;
                 jkGuiPlayer_menuNewElements[8].unistr = 0;
                 jkGuiPlayer_menuNewElements[5].selectedTextEntry = 0;

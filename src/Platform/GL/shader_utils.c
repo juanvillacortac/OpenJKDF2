@@ -110,8 +110,16 @@ GLuint create_shader(const char* shader, GLenum type) {
     defines = "#define CAN_BILINEAR_FILTER\n";
 #endif
 
-#if defined(TARGET_ANDROID)
-    version = "#version 300 es\n";
+#if defined(TARGET_ANDROID) || defined(TARGET_LINUX_GLES)
+    {
+        int gl_major = 0;
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &gl_major);
+        if (profile == SDL_GL_CONTEXT_PROFILE_ES && gl_major < 3) {
+            version = "#version 100\n";
+        } else {
+            version = "#version 300 es\n";
+        }
+    }
     extensions = "\n";
     defines = "#define CAN_BILINEAR_FILTER\n";
 #endif
