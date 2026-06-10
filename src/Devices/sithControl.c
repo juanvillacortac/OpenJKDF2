@@ -701,7 +701,19 @@ int sithControl_WriteConf()
 }
 
 #if defined(TARGET_LINUX_GLES) && defined(QOL_IMPROVEMENTS)
-/* Hold whatever is bound to Activate + direction = inventory on handheld. */
+/*
+ * Handheld inventory modifier: hold Activate (default X) + direction.
+ * - Left stick flick (movement stick): prev/next item or Force power, one step per
+ *   direction entry (return stick to neutral, then flick again).
+ * - D-pad tap: same, one step per physical press.
+ * Both paths are intentional; stick was the original design, D-pad was added later.
+ * If any D-pad direction has a player binding (e.g. Map on Up), the whole D-pad stops
+ * acting as movement fallback and as inventory nav with Activate; analog stick unchanged.
+ */
+#define SITHCONTROL_INV_STICK_THRESH 0.45f
+
+static int sithControl_invNavStickLatch;
+
 static int sithControl_IsActivateHeldForInventory(void)
 {
     stdControlKeyInfo *info = &sithControl_aInputFuncToKeyinfo[INPUT_FUNC_ACTIVATE];
@@ -717,7 +729,70 @@ static int sithControl_IsActivateHeldForInventory(void)
 static int sithControl_IsDpadKey(int dxKeyNum)
 {
     return dxKeyNum == KEY_JOY1_HUP || dxKeyNum == KEY_JOY1_HDOWN
-        || dxKeyNum == KEY_JOY1_HLEFT || dxKeyNum == KEY_JOY1_HRIGHT;
+        || dxKeyNum == KEY_JOY1_HLEFT || dxKeyNum == KEY_JOY1_HRIGHT
+        || dxKeyNum == KEY_JOY2_HUP || dxKeyNum == KEY_JOY2_HDOWN
+        || dxKeyNum == KEY_JOY2_HLEFT || dxKeyNum == KEY_JOY2_HRIGHT;
+}
+
+static int sithControl_DpadHasAnyHatBinding(void)
+{
+    int funcIdx;
+    int i;
+
+    for (funcIdx = 0; funcIdx < INPUT_FUNC_MAX; funcIdx++) {
+        stdControlKeyInfo *info = &sithControl_aInputFuncToKeyinfo[funcIdx];
+        for (i = 0; i < (int)info->numEntries; i++) {
+            if (sithControl_IsDpadKey((int)info->aEntries[i].dxKeyNum))
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static int sithControl_GetHandheldMoveJoyIdx(void)
+{
+    stdControlKeyInfo *info;
+    int i;
+
+    info = &sithControl_aInputFuncToKeyinfo[INPUT_FUNC_FORWARD];
+    for (i = 0; i < info->numEntries; i++) {
+        int k = (int)info->aEntries[i].dxKeyNum;
+        if ((info->aEntries[i].flags & INPUT_MAPPING_FLAG_AXIS) != 0 && k < AXIS_MOUSE_X)
+            return k / JK_JOYSTICK_AXIS_STRIDE;
+    }
+    info = &sithControl_aInputFuncToKeyinfo[INPUT_FUNC_SLIDE];
+    for (i = 0; i < info->numEntries; i++) {
+        int k = (int)info->aEntries[i].dxKeyNum;
+        if ((info->aEntries[i].flags & INPUT_MAPPING_FLAG_AXIS) != 0 && k < AXIS_MOUSE_X)
+            return k / JK_JOYSTICK_AXIS_STRIDE;
+    }
+    return 0;
+}
+
+static flex_d_t sithControl_ReadDpadHatForBoundAxis(int boundAxis)
+{
+    int localAxis;
+    int joyIdx;
+    int hatLeft;
+
+    if (boundAxis < AXIS_JOY1_X || boundAxis >= AXIS_MOUSE_X)
+        return 0.0;
+    localAxis = boundAxis % JK_JOYSTICK_AXIS_STRIDE;
+    joyIdx = boundAxis / JK_JOYSTICK_AXIS_STRIDE;
+    hatLeft = KEY_JOY1_HLEFT + joyIdx * JK_JOYSTICK_BUTTON_STRIDE;
+
+    if (localAxis == 1) {
+        if (stdControl_ReadKey(hatLeft + 1, 0))
+            return -1.0;
+        if (stdControl_ReadKey(hatLeft + 3, 0))
+            return 1.0;
+    } else if (localAxis == 0) {
+        if (stdControl_ReadKey(hatLeft, 0))
+            return -1.0;
+        if (stdControl_ReadKey(hatLeft + 2, 0))
+            return 1.0;
+    }
+    return 0.0;
 }
 
 static int sithControl_IsInventoryDpadFunc(int funcIdx)
@@ -740,23 +815,11 @@ static int sithControl_ShouldSkipDpadBinding(int funcIdx, int dxKeyNum)
         int invMode = sithControl_IsActivateHeldForInventory();
         if (sithControl_IsInventoryDpadFunc(funcIdx) && !invMode)
             return 1;
+        /* Activate held: inventory nav uses ReadDirectionInventoryWithActivate only. */
+        if (sithControl_IsInventoryDpadFunc(funcIdx) && invMode)
+            return 1;
         if (sithControl_IsMovementDpadFunc(funcIdx) && invMode)
             return 1;
-    }
-    return 0;
-}
-
-static int sithControl_DpadHasAnyBinding(void)
-{
-    int func;
-    int i;
-
-    for (func = 0; func < INPUT_FUNC_MAX; func++) {
-        stdControlKeyInfo *info = &sithControl_aInputFuncToKeyinfo[func];
-        for (i = 0; i < info->numEntries; i++) {
-            if (sithControl_IsDpadKey((int)info->aEntries[i].dxKeyNum))
-                return 1;
-        }
     }
     return 0;
 }
@@ -770,7 +833,9 @@ static flex_t sithControl_GetHandheldDpadMovementFallback(int axisNum)
     flex_d_t v4;
     flex_d_t hatRaw;
 
-    if (jkGui_GdiMode || sithControl_DpadHasAnyBinding() || sithControl_IsActivateHeldForInventory())
+    if (jkSmack_currentGuiState != JK_GAMEMODE_GAMEPLAY
+        || sithControl_DpadHasAnyHatBinding()
+        || sithControl_IsActivateHeldForInventory())
         return 0.0;
     if (!sithControl_IsMovementDpadFunc(axisNum))
         return 0.0;
@@ -781,21 +846,7 @@ static flex_t sithControl_GetHandheldDpadMovementFallback(int axisNum)
         if ((entry->flags & INPUT_MAPPING_FLAG_AXIS) == 0)
             continue;
 
-        hatRaw = 0.0;
-        if (entry->dxKeyNum == AXIS_JOY1_Y) {
-            if (stdControl_ReadKey(KEY_JOY1_HUP, 0))
-                hatRaw = -1.0;
-            else if (stdControl_ReadKey(KEY_JOY1_HDOWN, 0))
-                hatRaw = 1.0;
-        } else if (entry->dxKeyNum == AXIS_JOY1_X) {
-            if (stdControl_ReadKey(KEY_JOY1_HLEFT, 0))
-                hatRaw = -1.0;
-            else if (stdControl_ReadKey(KEY_JOY1_HRIGHT, 0))
-                hatRaw = 1.0;
-        } else {
-            continue;
-        }
-
+        hatRaw = sithControl_ReadDpadHatForBoundAxis((int)entry->dxKeyNum);
         if (hatRaw == 0.0)
             continue;
 
@@ -815,31 +866,102 @@ static flex_t sithControl_GetHandheldDpadMovementFallback(int axisNum)
     return v6;
 }
 
+/* One direction at a time; diagonals pick the dominant axis. */
+static int sithControl_GetInvStickDirectionMask(flex_t x, flex_t y)
+{
+    flex_t ax;
+    flex_t ay;
+    const flex_t thresh = SITHCONTROL_INV_STICK_THRESH;
+    int mask = 0;
+
+    ax = x < 0.0f ? -x : x;
+    ay = y < 0.0f ? -y : y;
+    if (ax < thresh && ay < thresh)
+        return 0;
+
+    if (ay >= ax) {
+        if (y < -thresh)
+            mask |= 1;
+        else if (y > thresh)
+            mask |= 2;
+    } else {
+        if (x < -thresh)
+            mask |= 4;
+        else if (x > thresh)
+            mask |= 8;
+    }
+    return mask;
+}
+
+/* Per-direction latch: inventory reads NEXT/PREV inv/skill separately each frame. */
+static int sithControl_GetInvStickEdgeBit(int stickMask, int bit)
+{
+    int active = (stickMask & bit) != 0;
+    int was = (sithControl_invNavStickLatch & bit) != 0;
+    int edge = active && !was;
+
+    if (active)
+        sithControl_invNavStickLatch |= bit;
+    else
+        sithControl_invNavStickLatch &= ~bit;
+
+    return edge;
+}
+
 static int sithControl_ReadDirectionInventoryWithActivate(int funcIdx, int *pOut)
 {
     flex_t y;
     flex_t x;
-    const flex_t thresh = 0.45f;
     int hit = 0;
+    int press;
+    int stickMask;
 
-    if (!sithControl_IsActivateHeldForInventory())
+    int joyIdx;
+    int yAxis;
+    int xAxis;
+    int hatLeft;
+    int dpadInvOk;
+
+    if (!sithControl_IsActivateHeldForInventory()) {
+        sithControl_invNavStickLatch = 0;
         return 0;
+    }
 
-    y = stdControl_ReadAxis(AXIS_JOY1_Y);
-    x = stdControl_ReadAxis(AXIS_JOY1_X);
+    joyIdx = sithControl_GetHandheldMoveJoyIdx();
+    yAxis = AXIS_JOY1_Y + joyIdx * JK_JOYSTICK_AXIS_STRIDE;
+    xAxis = AXIS_JOY1_X + joyIdx * JK_JOYSTICK_AXIS_STRIDE;
+    hatLeft = KEY_JOY1_HLEFT + joyIdx * JK_JOYSTICK_BUTTON_STRIDE;
+    dpadInvOk = !sithControl_DpadHasAnyHatBinding();
+
+    y = stdControl_ReadAxis(yAxis);
+    x = stdControl_ReadAxis(xAxis);
+
+    stickMask = sithControl_GetInvStickDirectionMask(x, y);
 
     switch (funcIdx) {
     case INPUT_FUNC_NEXTINV:
-        hit = (y < -thresh) || stdControl_ReadKey(KEY_JOY1_HUP, 0);
+        press = 0;
+        if (dpadInvOk)
+            stdControl_ReadKey(hatLeft + 1, &press);
+        hit = sithControl_GetInvStickEdgeBit(stickMask, 1) || press > 0;
         break;
     case INPUT_FUNC_PREVINV:
-        hit = (y > thresh) || stdControl_ReadKey(KEY_JOY1_HDOWN, 0);
+        press = 0;
+        if (dpadInvOk)
+            stdControl_ReadKey(hatLeft + 3, &press);
+        hit = sithControl_GetInvStickEdgeBit(stickMask, 2) || press > 0;
         break;
     case INPUT_FUNC_PREVSKILL:
-        hit = (x < -thresh) || stdControl_ReadKey(KEY_JOY1_HLEFT, 0);
+        press = 0;
+        if (dpadInvOk)
+            stdControl_ReadKey(hatLeft, &press);
+        hit = sithControl_GetInvStickEdgeBit(stickMask, 4) || press > 0;
         break;
     case INPUT_FUNC_NEXTSKILL:
-        hit = (x > thresh) || stdControl_ReadKey(KEY_JOY1_HRIGHT, 0);
+        press = 0;
+        if (dpadInvOk)
+            stdControl_ReadKey(hatLeft + 2, &press);
+        hit = sithControl_GetInvStickEdgeBit(stickMask, 8) || press > 0;
         break;
     default:
         return 0;
@@ -847,7 +969,7 @@ static int sithControl_ReadDirectionInventoryWithActivate(int funcIdx, int *pOut
 
     if (hit) {
         if (pOut)
-            *pOut = 1;
+            ++*pOut;
         return 1;
     }
     return 0;
@@ -2441,7 +2563,7 @@ LABEL_17:
 // Added
 void sithControl_MapDefaultsJoystick() {
 #if defined(TARGET_LINUX_GLES)
-    /* Handheld: sticks = move/look; unbound D-pad mirrors move stick in-game; Activate + stick = inventory */
+    /* Handheld: sticks = move/look; unbound D-pad mirrors move stick; Activate + stick/D-pad = inventory */
     stdControlKeyInfoEntry* mapped;
 
     mapped = sithControl_MapAxisFunc(INPUT_FUNC_FORWARD, AXIS_JOY1_Y, 4u);

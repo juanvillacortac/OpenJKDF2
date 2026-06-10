@@ -10,7 +10,7 @@ rm -rf build_aarch64
 mkdir -p build_aarch64 && pushd build_aarch64
 
 cmake .. \
-    --toolchain ../cmake_modules/toolchain_linux_aarch64.cmake \
+    -DCMAKE_TOOLCHAIN_FILE=../cmake_modules/toolchain_linux_aarch64.cmake \
     -DPLAT_LINUX_AARCH64=ON \
     -DCMAKE_BUILD_TYPE=Release
 

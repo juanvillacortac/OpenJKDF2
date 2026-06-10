@@ -392,7 +392,7 @@ void jkGuiTitle_LoadingFinalize()
             // Only update loading bar at 30fps, so that we don't waste time
             // during vsync.
             if (Linux_TimeUs() - lastRefresh < 32*1000) {
-                return;
+                continue;
             }
 
             lastRefresh = Linux_TimeUs();
