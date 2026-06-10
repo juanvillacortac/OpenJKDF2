@@ -32,6 +32,7 @@
 #include "Gui/jkGUIRend.h"
 #include "Gui/jkGUI.h"
 #include "Gui/jkGUIMods.h"
+#include "Gui/jkGUICheats.h"
 #include "World/jkPlayer.h"
 #include "Gameplay/jkSaber.h"
 #include "Win95/std.h"
@@ -410,6 +411,7 @@ int Main_Startup(const char *cmdline)
         jkGuiControlSaveLoad_Startup();
 #ifdef QOL_IMPROVEMENTS
         jkGuiMods_Startup();
+        jkGuiCheats_Startup();
 #endif
 #ifndef LINUX_TMP
         smack_Startup(); // TODO
@@ -501,6 +503,7 @@ void Main_Shutdown()
     jkGuiSingleTally_Shutdown();
 #ifdef QOL_IMPROVEMENTS
     jkGuiMods_Shutdown();
+    jkGuiCheats_Shutdown();
 #endif
     jkGuiRend_Shutdown();
     jkCog_Shutdown();

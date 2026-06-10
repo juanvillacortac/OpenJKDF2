@@ -28,6 +28,7 @@
 #include "Gui/jkGUI.h"
 #include "Gui/jkGUIMultiTally.h"
 #include "Gui/jkGUIForce.h"
+#include "Gui/jkGUICheats.h"
 #include "Gui/jkGUIMain.h"
 #include "Gui/jkGUITitle.h"
 #include "Gui/jkGUIDialog.h"
@@ -706,6 +707,11 @@ void jkMain_GameplayTick(int a2)
     }
     
     if (!thing_eight) {
+        return;
+    }
+
+    if (jkGuiCheats_ConsumePendingEndLevel()) {
+        jkMain_EndLevel(1);
         return;
     }
 

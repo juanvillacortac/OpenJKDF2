@@ -15,6 +15,7 @@
 #include "Gui/jkGUISaveLoad.h"
 #include "Gui/jkGUISetup.h"
 #include "Gui/jkGUIForce.h"
+#include "Gui/jkGUICheats.h"
 #include "World/jkPlayer.h"
 #include "Main/jk.h"
 #include "Main/jkStrings.h"
@@ -31,7 +32,8 @@ enum jkGuiEscButton_t
     JKGUIESC_RESTART      = 14,
     JKGUIESC_SAVE         = 15,
     JKGUIESC_SETUP        = 16,
-    JKGUIESC_ABORT        = 17
+    JKGUIESC_ABORT        = 17,
+    JKGUIESC_CHEATS       = 18
 };
 
 enum jkGuiEscElement_t
@@ -39,19 +41,21 @@ enum jkGuiEscElement_t
     JKGUIESC_ELMT_OBJECTIVES   = 0,
     JKGUIESC_ELMT_MAP          = 1,
     JKGUIESC_ELMT_JEDIPOWERS   = 2,
-    JKGUIESC_ELMT_RETURNTOGAME = 3,
-    JKGUIESC_ELMT_LOAD         = 4,
-    JKGUIESC_ELMT_SAVE         = 5,
-    JKGUIESC_ELMT_RESTART      = 6,
-    JKGUIESC_ELMT_SETUP        = 7,
-    JKGUIESC_ELMT_ABORT        = 8,
+    JKGUIESC_ELMT_CHEATS       = 3,
+    JKGUIESC_ELMT_RETURNTOGAME = 4,
+    JKGUIESC_ELMT_LOAD         = 5,
+    JKGUIESC_ELMT_SAVE         = 6,
+    JKGUIESC_ELMT_RESTART      = 7,
+    JKGUIESC_ELMT_SETUP        = 8,
+    JKGUIESC_ELMT_ABORT        = 9,
 };
 
-static jkGuiElement jkGuiEsc_aElements[10] = {
+static jkGuiElement jkGuiEsc_aElements[11] = {
     { ELEMENT_TEXTBUTTON, JKGUIESC_OBJECTIVES,   5, "GUI_OBJECTIVES",     3, {  0, 50,  400, 40},  1,  0,  0,  0,  0,  0, {0}, 0},
     { ELEMENT_TEXTBUTTON, JKGUIESC_MAP,          5, "GUI_MAP",            3, {  0, 100, 400, 40},  1,  0,  0,  0,  0,  0, {0}, 0},
     { ELEMENT_TEXTBUTTON, JKGUIESC_JEDIPOWERS,   5, "GUI_JEDIPOWERS",     3, {  0, 150, 400, 40},  1,  0,  0,  0,  0,  0, {0}, 0},
-    { ELEMENT_TEXTBUTTON, JKGUIESC_RETURNTOGAME, 5, "GUI_RETURN_TO_GAME", 3, {  0, 240, 400, 40},  1,  0,  0,  0,  0,  0, {0}, 0},
+    { ELEMENT_TEXTBUTTON, JKGUIESC_CHEATS,       5, L"Cheats",            3, {  0, 200, 400, 40},  0,  0,  0,  0,  0,  0, {0}, 0},
+    { ELEMENT_TEXTBUTTON, JKGUIESC_RETURNTOGAME, 5, "GUI_RETURN_TO_GAME", 3, {  0, 290, 400, 40},  1,  0,  0,  0,  0,  0, {0}, 0},
     { ELEMENT_TEXTBUTTON, JKGUIESC_LOAD,         5, "GUI_LOAD",           3, {400, 270, 240, 40},  1,  0,  0,  0,  0,  0, {0}, 0},
     { ELEMENT_TEXTBUTTON, JKGUIESC_SAVE,         5, "GUI_SAVE",           3, {400, 320, 240, 40},  1,  0,  0,  0,  0,  0, {0}, 0},
     { ELEMENT_TEXTBUTTON, JKGUIESC_RESTART,      5, "GUI_RESTART",        3, {400, 220, 240, 40},  1,  0,  0,  0,  0,  0, {0}, 0},
@@ -109,6 +113,8 @@ void jkGuiEsc_Show()
         }
     }
 
+    jkGuiEsc_aElements[JKGUIESC_ELMT_CHEATS].bIsVisible = jkGuiCheats_IsEnabled() && !sithNet_isMulti;
+
     while ( 1 )
     {
         jkGuiRend_MenuSetEscapeKeyShortcutElement(&jkGuiEsc_menu, &jkGuiEsc_aElements[JKGUIESC_ELMT_RETURNTOGAME]);
@@ -127,6 +133,15 @@ void jkGuiEsc_Show()
 
             case JKGUIESC_JEDIPOWERS:
                 jkGuiForce_Show(0, 0.0, 0.0, 0, 0, 0);
+                continue;
+
+            case JKGUIESC_CHEATS:
+                jkGuiCheats_Show();
+                if (jkGuiCheats_HasPendingEndLevel()) {
+                    jkMain_MissionReload();
+                    jkGuiRend_UpdateSurface();
+                    return;
+                }
                 continue;
 
             case JKGUIESC_LOAD:

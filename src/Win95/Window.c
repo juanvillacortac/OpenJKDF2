@@ -1477,7 +1477,12 @@ int Window_Main_Linux(int argc, char** argv)
 
     // Init SDL
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
-    SDL_SetHint(SDL_HINT_APP_NAME, "OpenJKDF2");
+    {
+        const char *app_name = getenv("SDL_HINT_APP_NAME");
+        if (!app_name || !app_name[0])
+            app_name = "OpenJKDF2";
+        SDL_SetHint(SDL_HINT_APP_NAME, app_name);
+    }
 
 #if defined(TARGET_ANDROID)
     //SDL_SetHint(SDL_HINT_JOYSTICK_DEBUG, "1");
