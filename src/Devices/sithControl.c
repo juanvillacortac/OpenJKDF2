@@ -1,5 +1,6 @@
 #include "sithControl.h"
 
+#include "Platform/handheld.h"
 #include "General/sithStrTable.h"
 #include "Platform/stdControl.h"
 #include "Devices/sithConsole.h"
@@ -576,6 +577,8 @@ int sithControl_ReadConf()
     {
         return 0;
     }
+    if (openjkdf2_IsHandheld())
+        sithWeapon_controlOptions &= ~0x20u;
     while ( stdConffile_ReadArgs() )
     {
         if ( !_strcmp(stdConffile_entry.args[0].key, "end.") )
@@ -675,6 +678,8 @@ int sithControl_WriteConf()
     stdControlKeyInfo *v1; // edi
     stdControlKeyInfoEntry* v3; // esi
 
+    if (openjkdf2_IsHandheld())
+        sithWeapon_controlOptions &= ~0x20u;
     if (!stdConffile_Printf("flags=%x\n", sithWeapon_controlOptions))
         return 0;
 
@@ -700,7 +705,7 @@ int sithControl_WriteConf()
     return 1;
 }
 
-#if defined(TARGET_LINUX_GLES) && defined(QOL_IMPROVEMENTS)
+#ifdef QOL_IMPROVEMENTS
 /*
  * Handheld inventory modifier: hold Activate (default X) + direction.
  * - Left stick flick (movement stick): prev/next item or Force power, one step per
@@ -809,6 +814,8 @@ static int sithControl_IsMovementDpadFunc(int funcIdx)
 
 static int sithControl_ShouldSkipDpadBinding(int funcIdx, int dxKeyNum)
 {
+    if (!openjkdf2_IsHandheld())
+        return 0;
     if (!sithControl_IsDpadKey(dxKeyNum))
         return 0;
     {
@@ -833,6 +840,8 @@ static flex_t sithControl_GetHandheldDpadMovementFallback(int axisNum)
     flex_d_t v4;
     flex_d_t hatRaw;
 
+    if (!openjkdf2_IsHandheld())
+        return 0.0;
     if (jkSmack_currentGuiState != JK_GAMEMODE_GAMEPLAY
         || sithControl_DpadHasAnyHatBinding()
         || sithControl_IsActivateHeldForInventory())
@@ -996,24 +1005,20 @@ int sithControl_ReadFunctionMap(int funcIdx, int *pOut)
         do
         {
             v4 = v3->dxKeyNum;
-#if defined(TARGET_LINUX_GLES)
-            if (sithControl_ShouldSkipDpadBinding(funcIdx, (int)v4))
+            if (openjkdf2_IsHandheld() && sithControl_ShouldSkipDpadBinding(funcIdx, (int)v4))
                 goto next_binding;
-#endif
             if ( !(sithWeapon_controlOptions & 0x20) || v4 < JK_EXTENDED_KEY_START || KEY_IS_MOUSE(v4) )
                 v6 |= stdControl_ReadKey(v4, pOut);
-#if defined(TARGET_LINUX_GLES)
 next_binding:
             ;
-#endif
             ++v2;
             ++v3;
         }
         while ( v2 < sithControl_aInputFuncToKeyinfo[funcIdx].numEntries );
     }
 
-#if defined(TARGET_LINUX_GLES) && defined(QOL_IMPROVEMENTS)
-    if (sithControl_IsInventoryDpadFunc(funcIdx))
+#ifdef QOL_IMPROVEMENTS
+    if (openjkdf2_IsHandheld() && sithControl_IsInventoryDpadFunc(funcIdx))
         v6 |= sithControl_ReadDirectionInventoryWithActivate(funcIdx, pOut);
 #endif
 
@@ -1038,8 +1043,8 @@ flex_t sithControl_GetAxisTimeCorrected(int axisNum)
     flex_d_t v4; // st7
     flex_t v6; // [esp+10h] [ebp-4h]
 
-#if defined(TARGET_LINUX_GLES) && defined(QOL_IMPROVEMENTS)
-    if (sithControl_IsActivateHeldForInventory() && sithControl_IsMovementDpadFunc(axisNum))
+#ifdef QOL_IMPROVEMENTS
+    if (openjkdf2_IsHandheld() && sithControl_IsActivateHeldForInventory() && sithControl_IsMovementDpadFunc(axisNum))
         return 0.0;
 #endif
 
@@ -1050,13 +1055,11 @@ flex_t sithControl_GetAxisTimeCorrected(int axisNum)
         entryIter = sithControl_aInputFuncToKeyinfo[axisNum].aEntries;
         do
         {
-#if defined(TARGET_LINUX_GLES)
-            if (sithControl_ShouldSkipDpadBinding(axisNum, (int)entryIter->dxKeyNum)) {
+            if (openjkdf2_IsHandheld() && sithControl_ShouldSkipDpadBinding(axisNum, (int)entryIter->dxKeyNum)) {
                 ++v1;
                 ++entryIter;
                 continue;
             }
-#endif
             v3 = entryIter->flags;
             if ( (v3 & 1) != 0 )
             {
@@ -1101,7 +1104,7 @@ LABEL_23:
         }
         while ( v1 < sithControl_aInputFuncToKeyinfo[axisNum].numEntries );
     }
-#if defined(TARGET_LINUX_GLES) && defined(QOL_IMPROVEMENTS)
+#ifdef QOL_IMPROVEMENTS
     v6 = v6 + sithControl_GetHandheldDpadMovementFallback(axisNum);
 #endif
     if ( v6 < -1.0 )
@@ -1119,8 +1122,8 @@ flex_t sithControl_GetAxisNonRaw(int funcIdx)
     flex_d_t v4; // st7
     flex_t v6; // [esp+8h] [ebp-4h]
 
-#if defined(TARGET_LINUX_GLES) && defined(QOL_IMPROVEMENTS)
-    if (sithControl_IsActivateHeldForInventory() && sithControl_IsMovementDpadFunc(funcIdx))
+#ifdef QOL_IMPROVEMENTS
+    if (openjkdf2_IsHandheld() && sithControl_IsActivateHeldForInventory() && sithControl_IsMovementDpadFunc(funcIdx))
         return 0.0;
 #endif
 
@@ -1131,13 +1134,11 @@ flex_t sithControl_GetAxisNonRaw(int funcIdx)
         v2 = sithControl_aInputFuncToKeyinfo[funcIdx].aEntries;
         do
         {
-#if defined(TARGET_LINUX_GLES)
-            if (sithControl_ShouldSkipDpadBinding(funcIdx, (int)v2->dxKeyNum)) {
+            if (openjkdf2_IsHandheld() && sithControl_ShouldSkipDpadBinding(funcIdx, (int)v2->dxKeyNum)) {
                 ++v1;
                 ++v2;
                 continue;
             }
-#endif
             v3 = v2->flags;
             if ( (v3 & INPUT_MAPPING_FLAG_RAW_AXIS) == 0 )
             {
@@ -1170,8 +1171,9 @@ LABEL_18:
         }
         while ( v1 < sithControl_aInputFuncToKeyinfo[funcIdx].numEntries );
     }
-#if defined(TARGET_LINUX_GLES) && defined(QOL_IMPROVEMENTS)
-    v6 = v6 + sithControl_GetHandheldDpadMovementFallback(funcIdx);
+#ifdef QOL_IMPROVEMENTS
+    if (openjkdf2_IsHandheld())
+        v6 = v6 + sithControl_GetHandheldDpadMovementFallback(funcIdx);
 #endif
     return v6;
 }
@@ -2562,48 +2564,52 @@ LABEL_17:
 
 // Added
 void sithControl_MapDefaultsJoystick() {
-#if defined(TARGET_LINUX_GLES)
-    /* Handheld: sticks = move/look; unbound D-pad mirrors move stick; Activate + stick/D-pad = inventory */
+#if defined(TARGET_TWL)
+    sithControl_MapFunc(INPUT_FUNC_FORWARD, KEY_JOY1_HUP, 0);
+    sithControl_MapFunc(INPUT_FUNC_NEXTSKILL, KEY_JOY1_HDOWN, 0);
+    sithControl_MapFunc(INPUT_FUNC_TURN, KEY_JOY1_HLEFT, 0);
+    sithControl_MapFunc(INPUT_FUNC_TURN, KEY_JOY1_HRIGHT, 4);
+    sithControl_DefaultHelper(INPUT_FUNC_FIRE1, KEY_JOY1_B1, 2); // a
+    sithControl_DefaultHelper(INPUT_FUNC_DUCK, KEY_JOY1_B2, 0); // b
+    sithControl_DefaultHelper(INPUT_FUNC_ACTIVATE, KEY_JOY1_B3, 2); // x
+    sithControl_MapFunc(INPUT_FUNC_JUMP, KEY_JOY1_B4, 0); // y
+    sithControl_MapFunc(INPUT_FUNC_NEXTINV, KEY_JOY1_B10, 0); // L
+    sithControl_MapFunc(INPUT_FUNC_NEXTWEAPON, KEY_JOY1_B11, 0); // R
+    sithControl_MapFunc(INPUT_FUNC_USELASTSELECTED, KEY_JOY1_B7, 0);
+#elif defined(QOL_IMPROVEMENTS)
     stdControlKeyInfoEntry* mapped;
 
-    mapped = sithControl_MapAxisFunc(INPUT_FUNC_FORWARD, AXIS_JOY1_Y, 4u);
-    if (mapped) {
-        mapped->binaryAxisVal = 1.0;
-    }
+    if (openjkdf2_IsHandheld()) {
+        /* Handheld: sticks = move/look; unbound D-pad mirrors move stick; Activate + stick/D-pad = inventory */
+        mapped = sithControl_MapAxisFunc(INPUT_FUNC_FORWARD, AXIS_JOY1_Y, 4u);
+        if (mapped)
+            mapped->binaryAxisVal = 1.0;
 
-    if (Main_bMotsCompat) {
-        mapped = sithControl_MapAxisFunc(INPUT_FUNC_SLIDE, AXIS_JOY1_X, 4u);
-    }
-    else {
-        mapped = sithControl_MapAxisFunc(INPUT_FUNC_SLIDE, AXIS_JOY1_X, 0u);
-    }
-    if (mapped) {
-        mapped->binaryAxisVal = 1.0;
-    }
+        if (Main_bMotsCompat)
+            mapped = sithControl_MapAxisFunc(INPUT_FUNC_SLIDE, AXIS_JOY1_X, 4u);
+        else
+            mapped = sithControl_MapAxisFunc(INPUT_FUNC_SLIDE, AXIS_JOY1_X, 0u);
+        if (mapped)
+            mapped->binaryAxisVal = 1.0;
 
-    mapped = sithControl_MapAxisFunc(INPUT_FUNC_PITCH, AXIS_JOY1_R, 4u);
-    if (mapped) {
-        mapped->binaryAxisVal = 1.25;
-    }
-    mapped = sithControl_MapAxisFunc(INPUT_FUNC_TURN, AXIS_JOY1_Z, 4u);
-    if (mapped) {
-        mapped->binaryAxisVal = 1.5;
-    }
+        mapped = sithControl_MapAxisFunc(INPUT_FUNC_PITCH, AXIS_JOY1_R, 4u);
+        if (mapped)
+            mapped->binaryAxisVal = 1.25;
+        mapped = sithControl_MapAxisFunc(INPUT_FUNC_TURN, AXIS_JOY1_Z, 4u);
+        if (mapped)
+            mapped->binaryAxisVal = 1.5;
 
-    sithControl_DefaultHelper(INPUT_FUNC_USELASTSELECTED, KEY_JOY1_B1, 2);
-    sithControl_DefaultHelper(INPUT_FUNC_DUCK, KEY_JOY1_B2, 2);
-    sithControl_DefaultHelper(INPUT_FUNC_ACTIVATE, KEY_JOY1_B3, 2);
-    sithControl_MapFunc(INPUT_FUNC_JUMP, KEY_JOY1_B4, 0);
-
-    sithControl_DefaultHelper(INPUT_FUNC_USEINV, KEY_JOY1_B8, 2);
-    sithControl_DefaultHelper(INPUT_FUNC_USESKILL, KEY_JOY1_B9, 2);
-
-    sithControl_MapFunc(INPUT_FUNC_PREVWEAPON, KEY_JOY1_B10, 0);
-    sithControl_MapFunc(INPUT_FUNC_NEXTWEAPON, KEY_JOY1_B11, 0);
-
-    sithControl_DefaultHelper(INPUT_FUNC_FIRE2, KEY_JOY1_B16, 2);
-    sithControl_DefaultHelper(INPUT_FUNC_FIRE1, KEY_JOY1_B17, 2);
-#elif !defined(TARGET_TWL) && defined(QOL_IMPROVEMENTS)
+        sithControl_DefaultHelper(INPUT_FUNC_USELASTSELECTED, KEY_JOY1_B1, 2);
+        sithControl_DefaultHelper(INPUT_FUNC_DUCK, KEY_JOY1_B2, 2);
+        sithControl_DefaultHelper(INPUT_FUNC_ACTIVATE, KEY_JOY1_B3, 2);
+        sithControl_MapFunc(INPUT_FUNC_JUMP, KEY_JOY1_B4, 0);
+        sithControl_DefaultHelper(INPUT_FUNC_USEINV, KEY_JOY1_B8, 2);
+        sithControl_DefaultHelper(INPUT_FUNC_USESKILL, KEY_JOY1_B9, 2);
+        sithControl_MapFunc(INPUT_FUNC_PREVWEAPON, KEY_JOY1_B10, 0);
+        sithControl_MapFunc(INPUT_FUNC_NEXTWEAPON, KEY_JOY1_B11, 0);
+        sithControl_DefaultHelper(INPUT_FUNC_FIRE2, KEY_JOY1_B16, 2);
+        sithControl_DefaultHelper(INPUT_FUNC_FIRE1, KEY_JOY1_B17, 2);
+    } else {
     stdControlKeyInfoEntry* mapped;
 
     mapped = sithControl_MapAxisFunc(INPUT_FUNC_FORWARD, AXIS_JOY1_Y, 4u);
@@ -2648,18 +2654,7 @@ void sithControl_MapDefaultsJoystick() {
 
     sithControl_DefaultHelper(INPUT_FUNC_FIRE2, KEY_JOY1_B16, 2); // ltrig
     sithControl_DefaultHelper(INPUT_FUNC_FIRE1, KEY_JOY1_B17, 2); // rtrig
-#elif defined(TARGET_TWL)
-    sithControl_MapFunc(INPUT_FUNC_FORWARD, KEY_JOY1_HUP, 0);
-    sithControl_MapFunc(INPUT_FUNC_NEXTSKILL, KEY_JOY1_HDOWN, 0);
-    sithControl_MapFunc(INPUT_FUNC_TURN, KEY_JOY1_HLEFT, 0);
-    sithControl_MapFunc(INPUT_FUNC_TURN, KEY_JOY1_HRIGHT, 4);
-    sithControl_DefaultHelper(INPUT_FUNC_FIRE1, KEY_JOY1_B1, 2); // a
-    sithControl_DefaultHelper(INPUT_FUNC_DUCK, KEY_JOY1_B2, 0); // b
-    sithControl_DefaultHelper(INPUT_FUNC_ACTIVATE, KEY_JOY1_B3, 2); // x
-    sithControl_MapFunc(INPUT_FUNC_JUMP, KEY_JOY1_B4, 0); // y
-    sithControl_MapFunc(INPUT_FUNC_NEXTINV, KEY_JOY1_B10, 0); // L
-    sithControl_MapFunc(INPUT_FUNC_NEXTWEAPON, KEY_JOY1_B11, 0); // R
-    sithControl_MapFunc(INPUT_FUNC_USELASTSELECTED, KEY_JOY1_B7, 0);
+    }
 #else
     sithControl_MapAxisFunc(INPUT_FUNC_FORWARD, AXIS_JOY1_Y, 4u);
     sithControl_MapAxisFunc(INPUT_FUNC_TURN, AXIS_JOY1_X, 4u);

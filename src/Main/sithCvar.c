@@ -1,4 +1,5 @@
 #include "sithCvar.h"
+#include "Platform/handheld.h"
 
 #include "General/stdString.h"
 #include "General/stdStrTable.h"
@@ -111,12 +112,11 @@ int sithCvar_LoadVar(tSithCvar* pCvar, const char* pFpath)
     char tmp[SITHCVAR_MAX_STRLEN];
     if (!pCvar) return 0;
 
-#if defined(TARGET_LINUX_GLES)
-    if (!strcmp(pCvar->pName, "hud_scale")
-        || !strcmp(pCvar->pName, "hud_crosshairScale")
-        || !strcmp(pCvar->pName, "hud_crosshairLineWidth"))
+    if (openjkdf2_IsHandheld()
+        && (!strcmp(pCvar->pName, "hud_scale")
+            || !strcmp(pCvar->pName, "hud_crosshairScale")
+            || !strcmp(pCvar->pName, "hud_crosshairLineWidth")))
         return 1;
-#endif
 
     switch (pCvar->type) {
         case CVARTYPE_BOOL:

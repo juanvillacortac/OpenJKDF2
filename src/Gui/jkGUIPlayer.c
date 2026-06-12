@@ -1,4 +1,5 @@
 #include "jkGUIPlayer.h"
+#include "Platform/handheld.h"
 
 #include "General/Darray.h"
 #include "General/stdBitmap.h"
@@ -282,13 +283,13 @@ void jkGuiPlayer_ShowNewPlayer(int a1)
             case 2:
                 jkGuiPlayer_menuNewElements[9].bIsVisible = v15 == 0;
                 jkGuiPlayer_menuNewElements[3].wstr = jkGuiPlayer_awTmp_555D28;
-#if defined(TARGET_LINUX_GLES)
-                stdString_CharToWchar(jkGuiPlayer_awTmp_555D28, "Jedi", 15);
-                jkGuiPlayer_awTmp_555D28[15] = 0;
-                jkGuiPlayer_menuNewElements[3].texInfo.textHeight = _wcslen(jkGuiPlayer_awTmp_555D28);
-#else
-                _memset(jkGuiPlayer_awTmp_555D28, 0, 16 * sizeof(wchar_t));
-#endif
+                if (openjkdf2_IsHandheld()) {
+                    stdString_CharToWchar(jkGuiPlayer_awTmp_555D28, "Jedi", 15);
+                    jkGuiPlayer_awTmp_555D28[15] = 0;
+                    jkGuiPlayer_menuNewElements[3].texInfo.textHeight = _wcslen(jkGuiPlayer_awTmp_555D28);
+                } else {
+                    _memset(jkGuiPlayer_awTmp_555D28, 0, 16 * sizeof(wchar_t));
+                }
                 jkGuiPlayer_menuNewElements[3].selectedTextEntry = 16;
                 jkGuiPlayer_menuNewElements[8].unistr = 0;
                 jkGuiPlayer_menuNewElements[5].selectedTextEntry = 0;

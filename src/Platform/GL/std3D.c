@@ -20,6 +20,7 @@
 
 #include "SDL2_helper.h"
 #include "Platform/trace_gles.h"
+#include "Platform/handheld.h"
 
 #ifdef WIN32
 // Force Optimus/AMD to use non-integrated GPUs by default.
@@ -1008,6 +1009,43 @@ int std3D_RenderListVerticesFinish()
     return 1;
 }
 
+int std3D_ShouldFitMenu4x3(double winW, double winH)
+{
+    const double ar43 = 640.0 / 480.0;
+    double aspect = winW / winH;
+    /* Menus/cutscenes: 4:3 on every non-4:3 panel (pillarbox on 3:2, letterbox on 1:1). */
+    return aspect < ar43 - 0.001 || aspect > ar43 + 0.001;
+}
+
+void std3D_FitMenu4x3(double winW, double winH, double *outX, double *outY, double *outW, double *outH)
+{
+    const double ar43 = 640.0 / 480.0;
+
+    if (winW / winH > ar43) {
+        *outH = winH;
+        *outW = winH * ar43;
+        *outX = (winW - *outW) / 2.0;
+        *outY = 0.0;
+    } else {
+        *outW = winW;
+        *outH = winW / ar43;
+        *outX = 0.0;
+        *outY = (winH - *outH) / 2.0;
+    }
+}
+
+void std3D_ComputeMenuRect(double winW, double winH, double *outX, double *outY, double *outW, double *outH)
+{
+    if (std3D_ShouldFitMenu4x3(winW, winH)) {
+        std3D_FitMenu4x3(winW, winH, outX, outY, outW, outH);
+    } else {
+        *outX = 0.0;
+        *outY = 0.0;
+        *outW = winW;
+        *outH = winH;
+    }
+}
+
 void std3D_DrawMenuSubrect(flex_t x, flex_t y, flex_t w, flex_t h, flex_t dstX, flex_t dstY, flex_t scale)
 {
     //double tex_w = (double)Window_xSize;
@@ -1181,12 +1219,14 @@ void std3D_DrawMenu()
     glDepthFunc(GL_ALWAYS);
     glUseProgram(programMenu);
     
-    float menu_w, menu_h, menu_u, menu_v, menu_x;
+    float menu_w, menu_h, menu_u, menu_v, menu_x, menu_y;
+    double menuRectX, menuRectY, menuRectW, menuRectH;
     menu_w = (double)Window_xSize;
     menu_h = (double)Window_ySize;
     menu_u = 1.0;
     menu_v = 1.0;
     menu_x = 0.0;
+    menu_y = 0.0;
     
     int bFixHudScale = 0;
 
@@ -1195,59 +1235,58 @@ void std3D_DrawMenu()
 
     if (!jkGame_isDDraw && !jkGuiBuildMulti_bRendering && !jkCutscene_isRendering)
     {
-        //menu_w = 640.0;
-        //menu_h = 480.0;
-
-        // Stretch screen
         menu_u = 1.0;
         menu_v = 1.0;
 
-        // Keep 4:3 aspect
-        menu_x = (menu_w - (menu_h * (640.0 / 480.0))) / 2.0;
-        menu_w = (menu_h * (640.0 / 480.0));
+        std3D_ComputeMenuRect((double)Window_xSize, (double)Window_ySize, &menuRectX, &menuRectY, &menuRectW, &menuRectH);
+        menu_x = (float)menuRectX;
+        menu_y = (float)menuRectY;
+        menu_w = (float)menuRectW;
+        menu_h = (float)menuRectH;
     }
     else if (jkCutscene_isRendering) {
         bFixHudScale = 1;
 
-        //menu_w = 640.0;
-        //menu_h = 480.0;
-
-        menu_w = Video_menuBuffer.format.width;
-        menu_h = Video_menuBuffer.format.height;
-
-        // For ultrawide screens, limit the width to 16:9
-        if (Window_xSize > Window_ySize && ((double)Window_xSize / (double)Window_ySize) > (Main_bMotsCompat ? (16.0/9.0) : (21.0/9.0))) {
-            fake_windowW = fake_windowH * (16.0/9.0);
-        }
-
-        // Keep 4:3 aspect
-        menu_x = (menu_w - (menu_h * (640.0 / 480.0))) / 2.0;
+        std3D_ComputeMenuRect((double)Window_xSize, (double)Window_ySize, &menuRectX, &menuRectY, &menuRectW, &menuRectH);
+        menu_x = (float)menuRectX;
+        menu_y = (float)menuRectY;
+        menu_w = (float)menuRectW;
+        menu_h = (float)menuRectH;
 
     }
     else if (jkGuiBuildMulti_bRendering)
     {
         bFixHudScale = 1;
 
-        // Stretch screen
         menu_u = 1.0;
         menu_v = 1.0;
 
-        // Keep 4:3 aspect
-        menu_x = (menu_w - (menu_h * (640.0 / 480.0))) / 2.0;
-        menu_w = (menu_h * (640.0 / 480.0));
+        std3D_ComputeMenuRect((double)Window_xSize, (double)Window_ySize, &menuRectX, &menuRectY, &menuRectW, &menuRectH);
+        menu_x = (float)menuRectX;
+        menu_y = (float)menuRectY;
+        menu_w = (float)menuRectW;
+        menu_h = (float)menuRectH;
     }
     else
     {
         bFixHudScale = 0;
 
-        menu_w = Video_menuBuffer.format.width;
-        menu_h = Video_menuBuffer.format.height;
+        if (openjkdf2_IsHandheld()) {
+            /* Stretch the 640x480 game/HUD buffer to the (possibly downscaled) window. */
+            menu_w = (double)Window_xSize;
+            menu_h = (double)Window_ySize;
+            menu_u = 1.0;
+            menu_v = 1.0;
+        } else {
+            menu_w = Video_menuBuffer.format.width;
+            menu_h = Video_menuBuffer.format.height;
+        }
     }
 
     if (!bFixHudScale)
     {
         GL_tmpVertices[0].x = menu_x;
-        GL_tmpVertices[0].y = 0.0;
+        GL_tmpVertices[0].y = menu_y;
         GL_tmpVertices[0].z = 0.0;
         GL_tmpVertices[0].tu = 0.0;
         GL_tmpVertices[0].tv = 0.0;
@@ -1256,7 +1295,7 @@ void std3D_DrawMenu()
         *(uint32_t*)&GL_tmpVertices[0].nz = 0;
         
         GL_tmpVertices[1].x = menu_x;
-        GL_tmpVertices[1].y = menu_h;
+        GL_tmpVertices[1].y = menu_y + menu_h;
         GL_tmpVertices[1].z = 0.0;
         GL_tmpVertices[1].tu = 0.0;
         GL_tmpVertices[1].tv = menu_v;
@@ -1265,7 +1304,7 @@ void std3D_DrawMenu()
         *(uint32_t*)&GL_tmpVertices[1].nz = 0;
         
         GL_tmpVertices[2].x = menu_x + menu_w;
-        GL_tmpVertices[2].y = menu_h;
+        GL_tmpVertices[2].y = menu_y + menu_h;
         GL_tmpVertices[2].z = 0.0;
         GL_tmpVertices[2].tu = menu_u;
         GL_tmpVertices[2].tv = menu_v;
@@ -1274,7 +1313,7 @@ void std3D_DrawMenu()
         *(uint32_t*)&GL_tmpVertices[2].nz = 0;
         
         GL_tmpVertices[3].x = menu_x + menu_w;
-        GL_tmpVertices[3].y = 0.0;
+        GL_tmpVertices[3].y = menu_y;
         GL_tmpVertices[3].z = 0.0;
         GL_tmpVertices[3].tu = menu_u;
         GL_tmpVertices[3].tv = 0.0;
@@ -1299,7 +1338,7 @@ void std3D_DrawMenu()
         GL_tmpTrisAmt = 0;
 
         // Main View
-        std3D_DrawMenuSubrect(0, 0, 640, 480, menu_x, 0, menu_w/640.0);
+        std3D_DrawMenuSubrect(0, 0, 640, 480, menu_x, menu_y, menu_w/640.0);
     }
     else if (jkCutscene_isRendering)
     {
@@ -1308,63 +1347,8 @@ void std3D_DrawMenu()
 
         glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA);
 
-        int video_height = Main_bMotsCompat ? 350 : 300;
-        int subs_y = 350;
-        int subs_h = 130;
-        if (Main_bMotsCompat) {
-            subs_y = 400;
-            subs_h = 80;
-        }
-
-        float partial_menu_w = (menu_h * (640.0 / 480.0));
-        float upscale = fake_windowW/640.0;
-        float upscale2 = (fake_windowH - (50 + video_height * upscale))/((double)subs_h);
-        float upscale3 = 1.0;//Window_ySize/480.0;
-
-        if (upscale2 < 1.0) {
-            upscale2 = 1.0;
-            if (fake_windowH > 480.0) {
-                upscale2 = 2.0;
-            }
-        }
-        if (upscale2 > upscale) {
-            upscale2 = upscale;
-        }
-
-        float shift_y = ((double)Window_ySize - fake_windowH) / 2.0;
-        float shift_x = ((double)Window_xSize - fake_windowW) / 2.0;
-
-        float sub_width = 640*upscale2;
-        float sub_x = (fake_windowW - sub_width) / 2.0;
-
-        float pause_width = 640*upscale3;
-        float pause_x = (fake_windowW - pause_width) / 2.0;
-
-        //printf("%f %f, %f %f %f, %d %d\n", sub_x, pause_x, upscale, upscale2, upscale3, Window_xSize, Window_ySize);
-
-        // Main View
-        std3D_DrawMenuSubrect(0, 50, 640, video_height, shift_x + 0, shift_y + 50, upscale);
-
-        // Subtitles
-        if (jkCutscene_dword_55B750) {
-            
-
-            // Some monitors might not have a bottom black bar, so draw an outline
-            std3D_DrawMenuSubrect2(0, subs_y, 640, subs_h, shift_x + sub_x-2, shift_y + fake_windowH - (subs_h*upscale2), upscale2);
-            std3D_DrawMenuSubrect2(0, subs_y, 640, subs_h, shift_x + sub_x+2, shift_y + fake_windowH - (subs_h*upscale2), upscale2);
-            std3D_DrawMenuSubrect2(0, subs_y, 640, subs_h, shift_x + sub_x, shift_y + fake_windowH - (subs_h*upscale2) - 2, upscale2);
-            std3D_DrawMenuSubrect2(0, subs_y, 640, subs_h, shift_x + sub_x, shift_y + fake_windowH - (subs_h*upscale2) + 2, upscale2);
-
-            //std3D_DrawMenuSubrect2(0, subs_y, 640, subs_h, shift_x + sub_x-2, shift_y + fake_windowH - (subs_h*upscale2) -2, upscale2);
-            //std3D_DrawMenuSubrect2(0, subs_y, 640, subs_h, shift_x + sub_x+2, shift_y + fake_windowH - (subs_h*upscale2) +2, upscale2);
-            //std3D_DrawMenuSubrect2(0, subs_y, 640, subs_h, shift_x + sub_x+2, shift_y + fake_windowH - (subs_h*upscale2) - 2, upscale2);
-            //std3D_DrawMenuSubrect2(0, subs_y, 640, subs_h, shift_x + sub_x-2, shift_y + fake_windowH - (subs_h*upscale2) + 2, upscale2);
-
-            std3D_DrawMenuSubrect(0, subs_y, 640, subs_h, shift_x + sub_x, shift_y + fake_windowH - (subs_h*upscale2), upscale2);
-        }
-
-        // Paused
-        std3D_DrawMenuSubrect(0, 10, 640, 40, shift_x + pause_x, shift_y + 0*upscale, upscale3);
+        /* Full 640x480 buffer (video centered in GLES jkCutscene) — same as menus. */
+        std3D_DrawMenuSubrect(0, 0, 640, 480, menu_x, menu_y, menu_w / 640.0);
     }
     else
     {
@@ -1833,7 +1817,6 @@ void std3D_DrawUIClearedRectRGBA(uint8_t color_r, uint8_t color_g, uint8_t color
         internalWidth = 640.0;
         internalHeight = 480.0;
     }
-
     double scaleX = (double)Window_xSize/(double)internalWidth;
     double scaleY = (double)Window_ySize/(double)internalHeight;
 
@@ -2340,6 +2323,7 @@ void std3D_DrawSceneFbo()
     glBlendEquation(GL_FUNC_ADD);
 
     glBindFramebuffer(GL_FRAMEBUFFER, std3D_pFb->window.fbo);
+    Window_BeginScreenDraw();
     glClear( GL_COLOR_BUFFER_BIT );
 
     static float frameNum = 1.0;

@@ -1,5 +1,6 @@
 #include "jkPlayer.h"
 
+#include "Platform/handheld.h"
 #include <math.h>
 #include <stdlib.h>
 #include "General/stdString.h"
@@ -209,8 +210,7 @@ void jkPlayer_StartupVars()
 }
 
 // Added: Clean reset
-#if defined(TARGET_LINUX_GLES)
-static void jkPlayer_SyncGlesHudLayout(void)
+static void jkPlayer_SyncHandheldHudLayout(void)
 {
     const int layoutW = 640;
     const int layoutH = 480;
@@ -236,8 +236,11 @@ static void jkPlayer_SyncGlesHudLayout(void)
     Video_format.height = layoutH;
 }
 
-void jkPlayer_ApplyGlesHandheldDefaults(void)
+void jkPlayer_ApplyHandheldDefaults(void)
 {
+    if (!openjkdf2_IsHandheld())
+        return;
+
     const char *ssaa_env = getenv("OPENJKDF2_SSAA");
     const char *hud_env = getenv("OPENJKDF2_HUD_SCALE");
 
@@ -252,6 +255,8 @@ void jkPlayer_ApplyGlesHandheldDefaults(void)
         if (v >= 0.25f && v <= 1.0f) {
             jkPlayer_ssaaMultiple = v;
         }
+    } else if (Window_ySize > 0 && Window_ySize <= 480 && jkPlayer_ssaaMultiple > 0.5f) {
+        jkPlayer_ssaaMultiple = 0.5f;
     } else if (jkPlayer_ssaaMultiple > 0.75f) {
         jkPlayer_ssaaMultiple = 0.75f;
     }
@@ -278,7 +283,7 @@ void jkPlayer_ApplyGlesHandheldDefaults(void)
 
     jkPlayer_crosshairScale = 1.0f;
     jkPlayer_crosshairLineWidth = 1.0f;
-    jkPlayer_SyncGlesHudLayout();
+    jkPlayer_SyncHandheldHudLayout();
 
     {
         tSithCvar *hudCvar = sithCvar_Find("hud_scale");
@@ -298,7 +303,6 @@ void jkPlayer_ApplyGlesHandheldDefaults(void)
         jkHudInv_LoadItemRes();
     }
 }
-#endif
 
 void jkPlayer_ResetVars()
 {
@@ -312,32 +316,23 @@ void jkPlayer_ResetVars()
     jkPlayer_enableBloom = 0;
     jkPlayer_enableSSAO = 0;
     jkPlayer_fpslimit = 0;
-#if defined(TARGET_LINUX_GLES)
-    jkPlayer_enableVsync = 0;
-    jkPlayer_ssaaMultiple = 0.75;
-    jkPlayer_hudScale = 1.0;
-#else
-    jkPlayer_enableVsync = 1;
-    jkPlayer_ssaaMultiple = 1.0;
-#endif
+    if (openjkdf2_IsHandheld()) {
+        jkPlayer_enableVsync = 0;
+        jkPlayer_ssaaMultiple = 0.75;
+        jkPlayer_hudScale = 1.0;
+        jkPlayer_bEnableJkgm = 0;
+        jkPlayer_bEnableTexturePrecache = 0;
+    } else {
+        jkPlayer_enableVsync = 1;
+        jkPlayer_ssaaMultiple = 1.0;
+        jkPlayer_bEnableJkgm = 1;
+        jkPlayer_bEnableTexturePrecache = 1;
+        jkPlayer_hudScale = 2.0;
+    }
     jkPlayer_gamma = 1.0;
-#if defined(TARGET_LINUX_GLES)
-    jkPlayer_bEnableJkgm = 0;
-#else
-    jkPlayer_bEnableJkgm = 1;
-#endif
-#if defined(TARGET_LINUX_GLES)
-    /* 2GB handheld: no precargar cientos de texturas GL durante sithWorld_Load */
-    jkPlayer_bEnableTexturePrecache = 0;
-#else
-    jkPlayer_bEnableTexturePrecache = 1;
-#endif
     jkPlayer_bKeepCorpses = 0;
     jkPlayer_bFastMissionText = 0;
     jkPlayer_bUseOldPlayerPhysics = 0;
-#if !defined(TARGET_LINUX_GLES)
-    jkPlayer_hudScale = 2.0;
-#endif
     jkPlayer_crosshairLineWidth = 1.0;
     jkPlayer_crosshairScale = 1.0;
     jkPlayer_canonicalCogTickrate = CANONICAL_COG_TICKRATE;
@@ -347,9 +342,8 @@ void jkPlayer_ResetVars()
     jkPlayer_setCrosshairOnFist = 1;
     jkPlayer_bDisableWeaponWaggle = 0;
 
-#if defined(TARGET_LINUX_GLES)
-    jkPlayer_ApplyGlesHandheldDefaults();
-#endif
+    if (openjkdf2_IsHandheld())
+        jkPlayer_ApplyHandheldDefaults();
 
     jkPlayer_bHasLoadedSettingsOnce = 0;
 #endif
@@ -381,9 +375,8 @@ int jkPlayer_LoadSave(char *path)
     int result;
     jkPlayer_bLoadingSomething = 1;
     result = sithGamesave_Load(path, 0, 1);
-#if defined(TARGET_LINUX_GLES)
-    jkPlayer_ApplyGlesHandheldDefaults();
-#endif
+    if (openjkdf2_IsHandheld())
+        jkPlayer_ApplyHandheldDefaults();
     return result;
 }
 
@@ -886,11 +879,11 @@ int jkPlayer_ReadConf(wchar_t *name)
         jkPlayer_bEnableTexturePrecache = stdJSON_GetBool(ext_fpath, "bEnableTexturePrecache", jkPlayer_bEnableTexturePrecache);
         jkPlayer_bKeepCorpses = stdJSON_GetBool(ext_fpath, "bKeepCorpses", jkPlayer_bKeepCorpses);
         jkPlayer_bFastMissionText = stdJSON_GetBool(ext_fpath, "bFastMissionText", jkPlayer_bFastMissionText);
-#if !defined(TARGET_LINUX_GLES)
-        jkPlayer_hudScale = stdJSON_GetFloat(ext_fpath, "hudScale", jkPlayer_hudScale);
-        jkPlayer_crosshairLineWidth = stdJSON_GetFloat(ext_fpath, "crosshairLineWidth", jkPlayer_crosshairLineWidth);
-        jkPlayer_crosshairScale = stdJSON_GetFloat(ext_fpath, "crosshairScale", jkPlayer_crosshairScale);
-#endif
+        if (!openjkdf2_IsHandheld()) {
+            jkPlayer_hudScale = stdJSON_GetFloat(ext_fpath, "hudScale", jkPlayer_hudScale);
+            jkPlayer_crosshairLineWidth = stdJSON_GetFloat(ext_fpath, "crosshairLineWidth", jkPlayer_crosshairLineWidth);
+            jkPlayer_crosshairScale = stdJSON_GetFloat(ext_fpath, "crosshairScale", jkPlayer_crosshairScale);
+        }
         jkPlayer_canonicalCogTickrate = stdJSON_GetFloat(ext_fpath, "canonicalCogTickrate", jkPlayer_canonicalCogTickrate);
         jkPlayer_canonicalPhysTickrate = stdJSON_GetFloat(ext_fpath, "canonicalPhysTickrate", jkPlayer_canonicalPhysTickrate);
 
@@ -899,12 +892,10 @@ int jkPlayer_ReadConf(wchar_t *name)
         jkPlayer_setCrosshairOnLightsaber = stdJSON_GetBool(ext_fpath, "setCrosshairOnLightsaber", jkPlayer_setCrosshairOnLightsaber);
         jkPlayer_setCrosshairOnFist = stdJSON_GetBool(ext_fpath, "setCrosshairOnFist", jkPlayer_setCrosshairOnFist);
         jkPlayer_bDisableWeaponWaggle = stdJSON_GetBool(ext_fpath, "bDisableWeaponWaggle", jkPlayer_bDisableWeaponWaggle);
-#endif
 #ifdef FIXED_TIMESTEP_PHYS
         jkPlayer_bJankyPhysics = stdJSON_GetBool(ext_fpath, "bJankyPhysics", jkPlayer_bJankyPhysics);
 #endif
 
-#ifdef QOL_IMPROVEMENTS
         sithCvar_LoadLocals(ext_fpath_cvars);
 
         if (jkPlayer_fov < FOV_MIN)
@@ -915,9 +906,7 @@ int jkPlayer_ReadConf(wchar_t *name)
         Window_SetHiDpi(Window_isHiDpi_tmp);
         Window_SetFullscreen(Window_isFullscreen_tmp);
 
-#if defined(TARGET_LINUX_GLES)
-        jkPlayer_ApplyGlesHandheldDefaults();
-#endif
+        jkPlayer_ApplyHandheldDefaults();
         std3D_UpdateSettings();
 
         jkPlayer_bHasLoadedSettingsOnce = 1;

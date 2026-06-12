@@ -29,6 +29,10 @@ static void openjkdf2_trace_write(const char *msg)
         return;
     }
 
+    fputs(msg, stderr);
+    fputc('\n', stderr);
+    fflush(stderr);
+
     fd = open("startup.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd < 0) {
         return;

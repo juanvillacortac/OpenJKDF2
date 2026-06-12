@@ -1,4 +1,5 @@
 #include "jkHudInv.h"
+#include "Platform/handheld.h"
 
 #include "Win95/Windows.h"
 #include "Win95/stdDisplay.h"
@@ -100,9 +101,8 @@ void jkHudInv_ClearRects()
     {
         if ( Video_pCanvas->heightMinusOne < jkHudInv_info.field_3C )
         {
-#if !defined(TARGET_LINUX_GLES)
-            stdDisplay_VBufferFill(Video_pMenuBuffer, Video_fillColor, &jkHudInv_info.drawRect);
-#endif
+            if (!openjkdf2_IsHandheld())
+                stdDisplay_VBufferFill(Video_pMenuBuffer, Video_fillColor, &jkHudInv_info.drawRect);
             --jkHudInv_info.field_28;
         }
     }
@@ -920,12 +920,10 @@ void jkHudInv_LoadItemRes()
 #endif
     v6 = Video_format.width;
     v7 = Video_format.height;
-#if defined(TARGET_LINUX_GLES)
-    if (Video_pMenuBuffer && Video_pMenuBuffer->format.width > 0) {
+    if (openjkdf2_IsHandheld() && Video_pMenuBuffer && Video_pMenuBuffer->format.width > 0) {
         v6 = Video_pMenuBuffer->format.width;
         v7 = Video_pMenuBuffer->format.height;
     }
-#endif
     _memset(&jkHudInv_info, 0, sizeof(jkHudInvInfo));
     _memset(&jkHudInv_scroll, 0, sizeof(jkHudInvScroll));
     v8 = v7 - HUD_SCALED(36);

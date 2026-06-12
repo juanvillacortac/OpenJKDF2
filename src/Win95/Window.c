@@ -41,6 +41,7 @@
 
 #include "SDL2_helper.h"
 #include "Platform/trace_gles.h"
+#include "Platform/handheld.h"
 #if defined(TARGET_LINUX_GLES)
 #include "Platform/Posix/gles_loader.h"
 #endif
@@ -71,6 +72,165 @@ int Window_isHiDpi = 0;
 int Window_isFullscreen = 0;
 int Window_needsRecreate = 0;
 int Window_bShouldPopSteamKeyboard = 0;
+
+#if defined(SDL2_RENDER)
+static int Window_physXSize;
+static int Window_physYSize;
+static int Window_presentX;
+static int Window_presentY;
+static int Window_presentW;
+static int Window_presentH;
+static int Window_bForcedResolution;
+
+static int Window_ParseForceRes(const char *env, int *outW, int *outH)
+{
+    int w = 0;
+    int h = 0;
+
+    if (!env || !env[0] || !outW || !outH)
+        return 0;
+
+    if (_sscanf(env, "%dx%d", &w, &h) == 2
+        || _sscanf(env, "%d,%d", &w, &h) == 2
+        || _sscanf(env, "%d %d", &w, &h) == 2)
+    {
+        if (w >= 160 && h >= 120 && w <= 3840 && h <= 2160) {
+            *outW = w;
+            *outH = h;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void Window_SetLogicalPresent(int logicalW, int logicalH, int physW, int physH)
+{
+    double logicalAspect = (double)logicalW / (double)logicalH;
+    double physAspect = (double)physW / (double)physH;
+
+    Window_bForcedResolution = 1;
+    Window_xSize = logicalW;
+    Window_ySize = logicalH;
+    Window_screenXSize = logicalW;
+    Window_screenYSize = logicalH;
+
+    if (logicalAspect > physAspect) {
+        Window_presentW = physW;
+        Window_presentH = (int)((double)physW / logicalAspect + 0.5);
+        Window_presentX = 0;
+        Window_presentY = (physH - Window_presentH) / 2;
+    } else {
+        Window_presentH = physH;
+        Window_presentW = (int)((double)physH * logicalAspect + 0.5);
+        Window_presentY = 0;
+        Window_presentX = (physW - Window_presentW) / 2;
+    }
+}
+
+static int Window_ShouldAutoDownscale(void)
+{
+    const char *env = getenv("OPENJKDF2_AUTO_DOWNSCALE");
+    if (env && (!strcmp(env, "0") || !__strcmpi(env, "false") || !__strcmpi(env, "off")))
+        return 0;
+    return 1;
+}
+
+static void Window_ApplyForcedResolution(void)
+{
+    int physW = Window_xSize;
+    int physH = Window_ySize;
+    int forceW = 0;
+    int forceH = 0;
+
+    if (!openjkdf2_IsHandheld()) {
+        Window_bForcedResolution = 0;
+        Window_presentX = 0;
+        Window_presentY = 0;
+        Window_presentW = physW;
+        Window_presentH = physH;
+        return;
+    }
+
+    Window_physXSize = physW;
+    Window_physYSize = physH;
+
+    if (Window_ParseForceRes(getenv("OPENJKDF2_FORCE_RES"), &forceW, &forceH)) {
+        Window_SetLogicalPresent(forceW, forceH, physW, physH);
+        stdPlatform_Printf(
+            "OpenJKDF2: OPENJKDF2_FORCE_RES %dx%d (present %dx%d at %d,%d on panel %dx%d)\n",
+            forceW, forceH,
+            Window_presentW, Window_presentH, Window_presentX, Window_presentY,
+            physW, physH);
+        return;
+    }
+
+    if (Window_ShouldAutoDownscale() && (physW < 640 || physH < 480)) {
+        double physAspect = (double)physW / (double)physH;
+        const double ar43 = 4.0 / 3.0;
+
+        /* Wide handheld panels (3:2, 16:9): fill the screen instead of 4:3 pillarbox. */
+        if (physAspect > ar43 + 0.001) {
+            Window_SetLogicalPresent(physW, physH, physW, physH);
+            stdPlatform_Printf(
+                "OpenJKDF2: auto downscale %dx%d fill panel (present %dx%d at %d,%d on panel %dx%d)\n",
+                physW, physH,
+                Window_presentW, Window_presentH, Window_presentX, Window_presentY,
+                physW, physH);
+            return;
+        }
+
+        double scale = (double)physW / 640.0;
+        if ((double)physH / 480.0 < scale)
+            scale = (double)physH / 480.0;
+
+        forceW = (int)(640.0 * scale + 0.5);
+        forceH = (int)(480.0 * scale + 0.5);
+        if (forceW < 160)
+            forceW = 160;
+        if (forceH < 120)
+            forceH = 120;
+
+        Window_SetLogicalPresent(forceW, forceH, physW, physH);
+        stdPlatform_Printf(
+            "OpenJKDF2: auto downscale %dx%d (present %dx%d at %d,%d on panel %dx%d)\n",
+            forceW, forceH,
+            Window_presentW, Window_presentH, Window_presentX, Window_presentY,
+            physW, physH);
+        return;
+    }
+
+    Window_bForcedResolution = 0;
+    Window_presentX = 0;
+    Window_presentY = 0;
+    Window_presentW = physW;
+    Window_presentH = physH;
+}
+
+static void Window_LogicalFromPanelCoords(int panelX, int panelY, int *outX, int *outY)
+{
+    if (Window_bForcedResolution && Window_presentW > 0 && Window_presentH > 0) {
+        panelX = (int)((panelX - Window_presentX) * (double)Window_xSize / (double)Window_presentW);
+        panelY = (int)((panelY - Window_presentY) * (double)Window_ySize / (double)Window_presentH);
+    }
+
+    *outX = panelX;
+    *outY = panelY;
+}
+
+void Window_BeginScreenDraw(void)
+{
+    if (!openjkdf2_IsHandheld())
+        return;
+    if (!Window_bForcedResolution || Window_presentW <= 0 || Window_presentH <= 0)
+        return;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, Window_physXSize, Window_physYSize);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glViewport(Window_presentX, Window_presentY, Window_presentW, Window_presentH);
+}
+#endif /* SDL2_RENDER */
 
 void Window_SetHiDpi(int val)
 {
@@ -406,6 +566,9 @@ void Window_HandleMouseMove(SDL_MouseMotionEvent *event)
     int x = event->x;
     int y = event->y;
 
+    if (openjkdf2_IsHandheld())
+        Window_LogicalFromPanelCoords(x, y, &x, &y);
+
     Window_lastMouseX = Window_mouseX;
     Window_lastMouseY = Window_mouseY;
 
@@ -415,12 +578,12 @@ void Window_HandleMouseMove(SDL_MouseMotionEvent *event)
         flex_t fX = (flex_t)x;
         flex_t fY = (flex_t)y;
 
-        // Keep 4:3 aspect
-        flex_t menu_x = ((flex_t)Window_screenXSize - ((flex_t)Window_screenYSize * (640.0 / 480.0))) / 2.0;
-        flex_t menu_w = ((flex_t)Window_screenYSize * (640.0 / 480.0));
+        double menu_x, menu_y, menu_w, menu_h;
 
-        Window_mouseX = (int)(((fX - menu_x) / (flex_t)menu_w) * 640.0);
-        Window_mouseY = (int)((fY / (flex_t)Window_screenYSize) * 480.0);
+        std3D_ComputeMenuRect((double)Window_screenXSize, (double)Window_screenYSize, &menu_x, &menu_y, &menu_w, &menu_h);
+
+        Window_mouseX = (int)(((fX - menu_x) / menu_w) * 640.0);
+        Window_mouseY = (int)(((fY - menu_y) / menu_h) * 480.0);
         //printf("%d %d\n", Window_mouseX, Window_mouseY);
     }
     else
@@ -490,9 +653,12 @@ void Window_HandleWindowEvent(SDL_Event* event)
             //Window_ySize = event->window.data2;
             SDL_GL_GetDrawableSize(displayWindow, &Window_xSize, &Window_ySize);
             SDL_GetWindowSize(displayWindow, &Window_screenXSize, &Window_screenYSize);
-
-            if (Window_xSize < 640) Window_xSize = 640;
-            if (Window_ySize < 480) Window_ySize = 480;
+            if (openjkdf2_IsHandheld())
+                Window_ApplyForcedResolution();
+            else {
+                if (Window_xSize < 640) Window_xSize = 640;
+                if (Window_ySize < 480) Window_ySize = 480;
+            }
             //printf("%u %u\n", Window_xSize, Window_ySize);
             break;
         case SDL_WINDOWEVENT_MINIMIZED:
@@ -1344,7 +1510,8 @@ void Window_RecreateSDL2Window()
 #endif
 
 #if defined(TARGET_ANDROID) || defined(TARGET_LINUX_GLES)
-    flags = SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN_DESKTOP;
+    /* OPENGL required for SDL_GL_CreateContext (Wayland/ROCKNIX rejects GL on non-GL windows). */
+    flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN_DESKTOP;
 #endif
 
 #ifdef ARCH_WASM
@@ -1358,6 +1525,8 @@ void Window_RecreateSDL2Window()
         char errtmp[256];
         snprintf(errtmp, 256, "!! Failed to create SDL2 window !!\n%s", SDL_GetError());
         openjkdf2_trace("Window_RecreateSDL2Window: SDL_CreateWindow failed");
+        fprintf(stderr, "%s\n", errtmp);
+        fflush(stderr);
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errtmp, NULL);
         exit (-1);
     }
@@ -1419,6 +1588,8 @@ void Window_RecreateSDL2Window()
         char errtmp[256];
         snprintf(errtmp, 256, "!! Failed to initialize SDL OpenGL context !!\n%s", SDL_GetError());
         openjkdf2_trace("Window_RecreateSDL2Window: SDL_GL_CreateContext failed");
+        fprintf(stderr, "%s\n", errtmp);
+        fflush(stderr);
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errtmp, NULL);
         exit(-1);
     }
@@ -1437,13 +1608,22 @@ void Window_RecreateSDL2Window()
             gl_major, gl_minor, gl_profile);
         if (!gles_loader_init()) {
             openjkdf2_trace("Window_RecreateSDL2Window: gles_loader_init failed");
-        } else {
+            fprintf(stderr, "OpenJKDF2: GLES loader init failed (missing GL symbols)\n");
+            fflush(stderr);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error",
+                "GLES loader init failed. See log.txt / startup.log.", NULL);
+            exit(-1);
+        }
+        {
             const GLubyte *ver = glGetString(GL_VERSION);
             const GLubyte *renderer = glGetString(GL_RENDERER);
             openjkdf2_trace_fmt("Window_RecreateSDL2Window: GL_VERSION=%s",
                 ver ? (const char*)ver : "null");
             openjkdf2_trace_fmt("Window_RecreateSDL2Window: GL_RENDERER=%s",
                 renderer ? (const char*)renderer : "null");
+            stdPlatform_Printf("OpenJKDF2: GL %s (%s)\n",
+                ver ? (const char*)ver : "unknown",
+                renderer ? (const char*)renderer : "unknown");
         }
     }
 #endif
@@ -1454,6 +1634,12 @@ void Window_RecreateSDL2Window()
 
     SDL_GL_GetDrawableSize(displayWindow, &Window_xSize, &Window_ySize);
     SDL_GetWindowSize(displayWindow, &Window_screenXSize, &Window_screenYSize);
+    if (openjkdf2_IsHandheld())
+        Window_ApplyForcedResolution();
+    else {
+        if (Window_xSize < 640) Window_xSize = 640;
+        if (Window_ySize < 480) Window_ySize = 480;
+    }
 
     Window_resized = 1;
     openjkdf2_trace("Window_RecreateSDL2Window: done");
@@ -1477,12 +1663,19 @@ int Window_Main_Linux(int argc, char** argv)
 
     // Init SDL
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
+    openjkdf2_InitHandheldMode();
     {
         const char *app_name = getenv("SDL_HINT_APP_NAME");
         if (!app_name || !app_name[0])
             app_name = "OpenJKDF2";
         SDL_SetHint(SDL_HINT_APP_NAME, app_name);
     }
+
+#if defined(TARGET_LINUX_GLES)
+    /* GLES-only binary: force ES driver when desktop GL is also available (ROCKNIX). */
+    if (!getenv("SDL_OPENGL_ES_DRIVER"))
+        SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
+#endif
 
 #if defined(TARGET_ANDROID)
     //SDL_SetHint(SDL_HINT_JOYSTICK_DEBUG, "1");
@@ -1506,8 +1699,7 @@ int Window_Main_Linux(int argc, char** argv)
     }
     openjkdf2_trace("Window_Main_Linux: SDL_Init ok");
 
-#if defined(TARGET_LINUX_GLES)
-    {
+    if (openjkdf2_IsHandheld()) {
         const char* w_env = getenv("DISPLAY_WIDTH");
         const char* h_env = getenv("DISPLAY_HEIGHT");
         if (w_env && h_env) {
@@ -1522,7 +1714,6 @@ int Window_Main_Linux(int argc, char** argv)
             }
         }
     }
-#endif
 
     if ((SDL_GetHintBoolean("SteamClientLaunch", 0) || SDL_GetHintBoolean("SteamOS", 0) || SDL_GetHintBoolean("SteamDeck", 0)) && SDL_GetHintBoolean("SteamGamepadUI", 0)) {
         Window_bShouldPopSteamKeyboard = 1;
@@ -1605,18 +1796,18 @@ int Window_Main_Linux(int argc, char** argv)
     openjkdf2_trace("Window_Main_Linux: apply window settings");
     Window_SetFullscreen(fullscreen);
     Window_SetHiDpi(hidpi);
-#if defined(TARGET_LINUX_GLES)
-    // Primer create ya aplicó 720x480; recrear aquí solo destruye GL sin haber renderizado
-    if (Window_needsRecreate) {
+    if (openjkdf2_IsHandheld()) {
+        /* First create already applied panel size; avoid tearing down GL before first frame. */
+        if (Window_needsRecreate) {
+            openjkdf2_trace("Window_Main_Linux: Window_RecreateSDL2Window (post-startup)");
+            Window_RecreateSDL2Window();
+        } else {
+            openjkdf2_trace("Window_Main_Linux: skip post-startup recreate");
+        }
+    } else {
         openjkdf2_trace("Window_Main_Linux: Window_RecreateSDL2Window (post-startup)");
         Window_RecreateSDL2Window();
-    } else {
-        openjkdf2_trace("Window_Main_Linux: skip post-startup recreate");
     }
-#else
-    openjkdf2_trace("Window_Main_Linux: Window_RecreateSDL2Window (post-startup)");
-    Window_RecreateSDL2Window();
-#endif
     openjkdf2_trace("Window_Main_Linux: window ready");
 
     if (!result) return result;

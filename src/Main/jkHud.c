@@ -1,4 +1,5 @@
 #include "jkHud.h"
+#include "Platform/handheld.h"
 
 #include "Gameplay/sithInventory.h"
 #include "Win95/Video.h"
@@ -49,7 +50,6 @@ static jkHudBitmap jkHud_aBitmaps[8] = {
 
 void jkHud_DrawGPU();
 
-#if defined(TARGET_LINUX_GLES)
 static void jkHud_GetLayoutSize(int *outW, int *outH)
 {
     if (Video_pMenuBuffer && Video_pMenuBuffer->format.width > 0) {
@@ -60,7 +60,6 @@ static void jkHud_GetLayoutSize(int *outW, int *outH)
         *outH = Video_format.height;
     }
 }
-#endif
 
 int jkHud_Startup()
 {
@@ -156,9 +155,8 @@ int jkHud_Open()
     {
         int layoutW = Video_format.width;
         int layoutH = Video_format.height;
-#if defined(TARGET_LINUX_GLES)
-        jkHud_GetLayoutSize(&layoutW, &layoutH);
-#endif
+        if (openjkdf2_IsHandheld())
+            jkHud_GetLayoutSize(&layoutW, &layoutH);
         jkHud_leftBlitX = 0;
         jkHud_leftBlitY = layoutH - HUD_SCALED((*jkHud_pStatusLeftBm->mipSurfaces)->format.height);
         v6 = *jkHud_pStatusRightBm->mipSurfaces;

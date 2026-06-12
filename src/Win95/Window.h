@@ -69,6 +69,7 @@ int Window_MessageLoop();
 void Window_SdlUpdate();
 void Window_SdlVblank();
 void Window_RecreateSDL2Window();
+void Window_BeginScreenDraw(void);
 #endif
 
 #endif // _WINDOW_H

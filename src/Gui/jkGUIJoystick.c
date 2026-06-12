@@ -1,5 +1,6 @@
 #include "jkGUIJoystick.h"
 
+#include "Platform/handheld.h"
 #include "General/Darray.h"
 #include "General/stdBitmap.h"
 #include "General/stdString.h"
@@ -211,6 +212,14 @@ static jkGuiElement jkGuiJoystick_aElements[33+3] = {
 #endif
     { ELEMENT_END, 0, 0, NULL, 0, { 0, 0, 0, 0 }, 0, 0, NULL, NULL, NULL, NULL, { 0, 0, 0, 0, 0, { 0, 0, 0, 0 } }, 0 }
 };
+
+/* Gamepad-first devices: no keyboard/mouse fallback — keep joystick enabled. */
+static void jkGuiJoystick_ApplyHandheldJoystickPolicy(void)
+{
+    jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_DISABLE_JOYSTICK].bIsVisible = 0;
+    jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_DISABLE_JOYSTICK].selectedTextEntry = 0;
+    sithWeapon_controlOptions &= ~0x20u;
+}
 
 static jkGuiMenu jkGuiJoystick_menu = {
   jkGuiJoystick_aElements, 0, 225, 255, 15, NULL, NULL, jkGui_stdBitmaps, jkGui_stdFonts, 0, jkGuiJoystick_MenuTick, "thermloop01.wav", "thrmlpu2.wav", NULL, NULL, NULL, 0, NULL, NULL
@@ -971,7 +980,8 @@ void jkGuiJoystick_MenuTick(jkGuiMenu *pMenu)
             jkGuiJoystick_aElements[34].bIsVisible = 0;
 #endif
             jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_CONTROLS_LIST].bIsVisible = 1;
-            jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_DISABLE_JOYSTICK].bIsVisible = 1;
+            if (!openjkdf2_IsHandheld())
+                jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_DISABLE_JOYSTICK].bIsVisible = 1;
             jkGuiJoystick_Draw(pMenu, 0);
             v5 = &jkGuiJoystick_aEntries[0];
             do
@@ -1106,14 +1116,19 @@ int32_t jkGuiJoystick_Show()
     jkGuiJoystick_aElements[33].bIsVisible = 0;
     jkGuiJoystick_aElements[34].bIsVisible = 0;
 #endif
-    jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_DISABLE_JOYSTICK].clickHandlerFunc = jkGuiJoystick_DisableJoystickClick;
+    if (openjkdf2_IsHandheld()) {
+        jkGuiJoystick_ApplyHandheldJoystickPolicy();
+    } else {
+        jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_DISABLE_JOYSTICK].clickHandlerFunc = jkGuiJoystick_DisableJoystickClick;
+    }
     jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_CONTROLS_LIST].selectedTextEntry = 0;
     jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_LIST12].selectedTextEntry = 0;
     jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_LIST13].selectedTextEntry = 0;
     jkGuiJoystick_dword_557128 = 0;
     jkGuiJoystick_dword_536B98 = -1;
     jkGuiJoystick_dword_536B9C = -1;
-    jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_DISABLE_JOYSTICK].selectedTextEntry = !!(sithWeapon_controlOptions & 0x20);
+    if (!openjkdf2_IsHandheld())
+        jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_DISABLE_JOYSTICK].selectedTextEntry = !!(sithWeapon_controlOptions & 0x20);
     jkGuiJoystick_Draw(&jkGuiJoystick_menu, 0);
     jkGuiRend_ElementSetClickShortcutScancode(&jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_ADD_CONTROL], VK_INSERT);
     jkGuiRend_ElementSetClickShortcutScancode(&jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_REMOVE_CONTROL], VK_DELETE);
@@ -1137,10 +1152,13 @@ int32_t jkGuiJoystick_Show()
         if ( jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_REVERSE_AXIS].bIsVisible )
             v1->flags = v1->flags & ~4u | (jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_REVERSE_AXIS].selectedTextEntry != 0 ? 0 : 4);
     }
-    if ( jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_DISABLE_JOYSTICK].selectedTextEntry )
+    if (openjkdf2_IsHandheld()) {
+        jkGuiJoystick_ApplyHandheldJoystickPolicy();
+    } else if ( jkGuiJoystick_aElements[JKGUIJOYSTICK_IDX_DISABLE_JOYSTICK].selectedTextEntry ) {
         sithWeapon_controlOptions |= 0x20;
-    else
+    } else {
         sithWeapon_controlOptions &= ~0x20;
+    }
 
     if ( v0 == 1 )
         jkPlayer_WriteConf(jkPlayer_playerShortName);

@@ -1,4 +1,5 @@
 #include "jkGUISaveLoad.h"
+#include "Platform/handheld.h"
 
 #include "Main/jkEpisode.h"
 #include "General/stdFileUtil.h"
@@ -361,15 +362,15 @@ int jkGuiSaveLoad_Show(int bIsSave)
     jkGuiSaveLoad_word_559830[255] = 0;
     if (bIsSave) {
         jkGuiSaveLoad_EnsureDefaultSaveName();
-#if defined(TARGET_LINUX_GLES)
-        /* Handhelds cannot type in the name field; start on OK or the save list. */
-        if (jkGuiSaveLoad_numEntries > 0)
-            jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[4];
-        else
-            jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[11];
-#else
-        jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[2];
-#endif
+        if (openjkdf2_IsHandheld()) {
+            /* Handhelds cannot type in the name field; start on OK or the save list. */
+            if (jkGuiSaveLoad_numEntries > 0)
+                jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[4];
+            else
+                jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[11];
+        } else {
+            jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[2];
+        }
     } else {
         jkGuiSaveLoad_menu.focusedElement = &jkGuiSaveLoad_aElements[2];
     }

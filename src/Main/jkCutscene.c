@@ -1,4 +1,5 @@
 #include "jkCutscene.h"
+#include "Platform/handheld.h"
 
 #include "General/stdStrTable.h"
 #include "General/stdFont.h"
@@ -48,6 +49,55 @@ static stdSound_buffer_t* jkCutscene_audio[AUDIO_NUM_STDBUFS];
 
 static stdSound_buffer_t* jkCutscene_lastAudio = NULL;
 static stdSound_buffer_t* jkCutscene_currentAudio = NULL;
+
+static int jkCutscene_videoBufY(void)
+{
+    if (openjkdf2_IsHandheld()) {
+        int vh = Main_bMotsCompat ? 350 : 300;
+        return (480 - vh) / 2;
+    }
+    return 50;
+}
+
+static wchar_t* jkCutscene_lookupSmushSubtitle(void)
+{
+    int32_t uVar3 = jkCutscene_dword_55B750 & 0x7FFFFFFF;
+    if (!uVar3 || !jkCutscene_pSmush)
+        return NULL;
+
+    int32_t uVar4 = uVar3 % 10000;
+    int32_t iVar2 = 0;
+    if (uVar3 / 10000 == 1) {
+        iVar2 = 7;
+    } else {
+        iVar2 = (uVar3 / 10000 == 2) + 8;
+    }
+    if ((iVar2 == 8) && ((uVar4 == 166 || (uVar4 == 148)))) {
+        iVar2 = 5;
+    }
+
+    char key[32];
+    stdString_snprintf(key, 32, "COG_%05d", iVar2 * 10000 + uVar4);
+    return jkStrings_GetUniStringWithFallback(key);
+}
+
+static int jkCutscene_shouldShowSubsBar(void)
+{
+    int32_t idx = jkCutscene_dword_55B750 & 0x7FFFFFFF;
+    if (!idx)
+        return 0;
+
+    if (jkCutscene_pSmush) {
+        wchar_t* str = jkCutscene_lookupSmushSubtitle();
+        if (!str)
+            return 0;
+        if (*str == L'|')
+            return 1;
+        return jkPlayer_setFullSubtitles != 0;
+    }
+
+    return (jkCutscene_dword_55B750 & 0x80000000 || jkPlayer_setFullSubtitles) != 0;
+}
 static uint8_t* jkCutscene_currentAudioBuf = NULL;
 static int32_t jkCutscene_currentAudioBufSize = 0;
 static int32_t jkCutscene_currentAudioWritten = 0;
@@ -585,29 +635,12 @@ int jkCutscene_smack_related_loops()
         }
         else if ( jkCutscene_dword_55B750 != jkCutscene_dword_55AA50 )
         {
-            stdDisplay_VBufferFill(&Video_otherBuf, 0, &jkCutscene_rect1);
+            if (jkCutscene_shouldShowSubsBar())
+                stdDisplay_VBufferFill(&Video_otherBuf, 0, &jkCutscene_rect1);
 
             if (jkCutscene_pSmush)
             {
-                wchar_t* str = NULL;
-                int32_t uVar3 = jkCutscene_dword_55B750 & 0x7FFFFFFF;
-                if (uVar3) {
-                    int32_t uVar4 = uVar3 % 10000;
-                    int32_t iVar2 = 0;
-                    if (uVar3 / 10000 == 1) {
-                      iVar2 = 7;
-                    }
-                    else {
-                      iVar2 = (uVar3 / 10000 == 2) + 8;
-                    }
-                    if ((iVar2 == 8) && ((uVar4 == 166 || (uVar4 == 148)))) {
-                      iVar2 = 5;
-                    }
-
-                    char key[32];
-                    stdString_snprintf(key, 32, "COG_%05d", iVar2 * 10000 + uVar4);
-                    str = jkStrings_GetUniStringWithFallback(key);
-                }
+                wchar_t* str = jkCutscene_lookupSmushSubtitle();
                 
                 if (str) {
                     int32_t forced = 0;
@@ -678,10 +711,12 @@ int jkCutscene_PauseShow(int unk)
 
 #if defined(SDL2_RENDER) || defined(TARGET_TWL)
     stdDisplay_VBufferLock(Video_pMenuBuffer);
-    stdDisplay_VBufferCopy(Video_pMenuBuffer, jkCutscene_frameBuf, 0, 50, NULL, 0);
-    stdDisplay_VBufferFill(Video_pMenuBuffer, 0, &jkCutscene_rect1);
+    stdDisplay_VBufferCopy(Video_pMenuBuffer, jkCutscene_frameBuf, 0, jkCutscene_videoBufY(), NULL, 0);
+    if (jkCutscene_shouldShowSubsBar()) {
+        stdDisplay_VBufferFill(Video_pMenuBuffer, 0, &jkCutscene_rect1);
+        stdDisplay_VBufferCopy(Video_pMenuBuffer, &Video_otherBuf, jkCutscene_rect1.x, jkCutscene_rect1.y, &jkCutscene_rect1, 0);
+    }
     stdDisplay_VBufferFill(Video_pMenuBuffer, 0, &jkCutscene_rect2);
-    stdDisplay_VBufferCopy(Video_pMenuBuffer, &Video_otherBuf, jkCutscene_rect1.x, jkCutscene_rect1.y, &jkCutscene_rect1, 0);
     stdDisplay_VBufferCopy(Video_pMenuBuffer, &Video_otherBuf, jkCutscene_rect2.x, jkCutscene_rect2.y, &jkCutscene_rect2, 0);
     stdDisplay_VBufferUnlock(Video_pMenuBuffer);
 #endif
@@ -946,9 +981,11 @@ int jkCutscene_smacker_process()
     stdDisplay_VBufferUnlock(jkCutscene_frameBuf);
     
     stdDisplay_VBufferLock(Video_pMenuBuffer);
-    stdDisplay_VBufferCopy(Video_pMenuBuffer, jkCutscene_frameBuf, 0, 50, NULL, 0);
-    stdDisplay_VBufferFill(Video_pMenuBuffer, 0, &jkCutscene_rect1);
-    stdDisplay_VBufferCopy(Video_pMenuBuffer, &Video_otherBuf, jkCutscene_rect1.x, jkCutscene_rect1.y, &jkCutscene_rect1, 0);
+    stdDisplay_VBufferCopy(Video_pMenuBuffer, jkCutscene_frameBuf, 0, jkCutscene_videoBufY(), NULL, 0);
+    if (jkCutscene_shouldShowSubsBar()) {
+        stdDisplay_VBufferFill(Video_pMenuBuffer, 0, &jkCutscene_rect1);
+        stdDisplay_VBufferCopy(Video_pMenuBuffer, &Video_otherBuf, jkCutscene_rect1.x, jkCutscene_rect1.y, &jkCutscene_rect1, 0);
+    }
     stdDisplay_VBufferUnlock(Video_pMenuBuffer);
 #endif
 
@@ -1018,9 +1055,11 @@ int jkCutscene_smusher_process()
     stdDisplay_VBufferUnlock(jkCutscene_frameBuf);
     
     stdDisplay_VBufferLock(Video_pMenuBuffer);
-    stdDisplay_VBufferCopy(Video_pMenuBuffer, jkCutscene_frameBuf, 0, 50, NULL, 0);
-    stdDisplay_VBufferFill(Video_pMenuBuffer, 0, &jkCutscene_rect1);
-    stdDisplay_VBufferCopy(Video_pMenuBuffer, &Video_otherBuf, jkCutscene_rect1.x, jkCutscene_rect1.y, &jkCutscene_rect1, 0);
+    stdDisplay_VBufferCopy(Video_pMenuBuffer, jkCutscene_frameBuf, 0, jkCutscene_videoBufY(), NULL, 0);
+    if (jkCutscene_shouldShowSubsBar()) {
+        stdDisplay_VBufferFill(Video_pMenuBuffer, 0, &jkCutscene_rect1);
+        stdDisplay_VBufferCopy(Video_pMenuBuffer, &Video_otherBuf, jkCutscene_rect1.x, jkCutscene_rect1.y, &jkCutscene_rect1, 0);
+    }
     stdDisplay_VBufferUnlock(Video_pMenuBuffer);
     
     smush_frame(jkCutscene_pSmush);

@@ -1,4 +1,5 @@
 #include "Video.h"
+#include "Platform/handheld.h"
 
 #include "Engine/rdroid.h"
 #include "Engine/sithCamera.h"
@@ -270,9 +271,7 @@ LABEL_25:
         v7 = (char*)stdDisplay_GetPalette();
         sithRender_SetPalette(v7);
         jkHudInv_LoadItemRes();
-#if defined(TARGET_LINUX_GLES)
-        jkPlayer_ApplyGlesHandheldDefaults();
-#endif
+        jkPlayer_ApplyHandheldDefaults();
         jkHud_Open();
         if (Main_bMotsCompat) {
             jkHudScope_Open();

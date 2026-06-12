@@ -1,6 +1,7 @@
 #include "jkMain.h"
 
 #include "../jk.h"
+#include "Platform/handheld.h"
 #include "Platform/trace_gles.h"
 #include "Engine/rdroid.h"
 #include "Main/sithMain.h"
@@ -1552,34 +1553,30 @@ void jkMain_FixRes()
     uint32_t newW = Window_xSize;
     uint32_t newH = Window_ySize;
 
-#if defined(TARGET_LINUX_GLES)
-    /* Menu/HUD buffer stays 640x480; std3D scales to the window. */
-    newW = 640;
-    newH = 480;
-#else
-    //if (jkGame_isDDraw)
-    {
+    if (openjkdf2_IsHandheld()) {
+        /* Menu/HUD buffer stays 640x480; std3D scales to the window. */
+        newW = 640;
+        newH = 480;
+    } else {
         newW = (uint32_t)((flex_t)Window_xSize * ((480.0*2.0)/Window_ySize));
         newH = 480*2;
+
+        if (newW > Window_xSize) {
+            newW = Window_xSize;
+            newH = Window_ySize;
+        }
+
+        if (newW < 640)
+            newW = 640;
+        if (newH < 480)
+            newH = 480;
+
+        Video_modeStruct.viewSizeIdx = 0;
+        Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].xMin = 0;
+        Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].yMin = 0;
+        Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].xMax = newW / 2;
+        Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].yMax = newH / 2;
     }
-
-    if (newW > Window_xSize)
-    {
-        newW = Window_xSize;
-        newH = Window_ySize;
-    }
-
-    if (newW < 640)
-        newW = 640;
-    if (newH < 480)
-        newH = 480;
-
-    Video_modeStruct.viewSizeIdx = 0;
-    Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].xMin = 0;
-    Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].yMin = 0;
-    Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].xMax = newW / 2;
-    Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].yMax = newH / 2;
-#endif
     
     stdDisplay_pCurVideoMode->format.width = newW;
     stdDisplay_pCurVideoMode->format.height = newH;
@@ -1613,9 +1610,8 @@ void jkMain_FixRes()
 #endif
 
     jkHudInv_LoadItemRes();
-#if defined(TARGET_LINUX_GLES)
-    jkPlayer_ApplyGlesHandheldDefaults();
-#endif
+    if (openjkdf2_IsHandheld())
+        jkPlayer_ApplyHandheldDefaults();
     jkHud_Open();
     if (Main_bMotsCompat) {
         jkHudScope_Open();
@@ -1638,14 +1634,11 @@ int jkMain_SetVideoMode()
     wchar_t *v3; // [esp-4h] [ebp-10h]
     wchar_t *v4; // [esp-4h] [ebp-10h]
 
-#if defined(TARGET_LINUX_GLES)
-    if (jkGame_isDDraw) {
-        jkPlayer_ApplyGlesHandheldDefaults();
+    if ( jkGame_isDDraw ) {
+        if (openjkdf2_IsHandheld())
+            jkPlayer_ApplyHandheldDefaults();
         return 0;
     }
-#endif
-    if ( jkGame_isDDraw )
-        return 0;
     
     /*if ( !sithNet_isMulti )
     {
@@ -1716,9 +1709,8 @@ int jkMain_SetVideoMode()
         jkHudScope_Close();
         jkHudCameraView_Close();
     }
-#if defined(TARGET_LINUX_GLES)
-    jkPlayer_ApplyGlesHandheldDefaults();
-#endif
+    if (openjkdf2_IsHandheld())
+        jkPlayer_ApplyHandheldDefaults();
     jkHud_Open();
     if (Main_bMotsCompat) {
         jkHudScope_Open();

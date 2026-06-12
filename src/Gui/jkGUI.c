@@ -1,4 +1,5 @@
 #include "jkGUI.h"
+#include "Platform/handheld.h"
 
 #include "General/Darray.h"
 #include "General/stdBitmap.h"
@@ -268,10 +269,8 @@ int jkGui_Startup()
     stdString_CharToWchar(jkPlayer_playerShortName, playerShortName, 31);
     jkPlayer_playerShortName[31] = 0;
 
-#if defined(TARGET_LINUX_GLES)
-    if (!jkPlayer_ReadConf(jkPlayer_playerShortName))
-        jkPlayer_ApplyGlesHandheldDefaults();
-#endif
+    if (openjkdf2_IsHandheld() && !jkPlayer_ReadConf(jkPlayer_playerShortName))
+        jkPlayer_ApplyHandheldDefaults();
 
     for (int i = 0; i < JKGUI_NUM_FONTS; i++)
     {

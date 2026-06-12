@@ -1,4 +1,5 @@
 #include "InstallHelper.h"
+#include "Platform/handheld.h"
 
 #include "../jk.h"
 #include "General/stdString.h"
@@ -921,14 +922,14 @@ final_check:
 
 int InstallHelper_AttemptInstall()
 {
-#if defined(TARGET_LINUX_GLES)
-    SDL_ShowSimpleMessageBox(
-        SDL_MESSAGEBOX_ERROR,
-        "OpenJKDF2",
-        "Missing game data. Copy Steam JKDF2 files (episode/, resource/) into ports/openjkdf2/.",
-        NULL);
-    return 0;
-#endif
+    if (openjkdf2_IsHandheld()) {
+        SDL_ShowSimpleMessageBox(
+            SDL_MESSAGEBOX_ERROR,
+            "OpenJKDF2",
+            "Missing game data. Copy Steam JKDF2 files (episode/, resource/) into ports/openjkdf2/.",
+            NULL);
+        return 0;
+    }
 
     // TODO: Polyglot
     const SDL_MessageBoxButtonData buttons[] = {
@@ -1119,11 +1120,10 @@ void InstallHelper_SetCwd()
         InstallHelper_AttemptInstall();
     }*/
     if (!util_FileExists("resource/jk_.cd")) {
-#if defined(TARGET_LINUX_GLES)
-        InstallHelper_CheckRequiredAssets(0);
-#else
-        InstallHelper_CheckRequiredAssets(1);
-#endif
+        if (openjkdf2_IsHandheld())
+            InstallHelper_CheckRequiredAssets(0);
+        else
+            InstallHelper_CheckRequiredAssets(1);
     }
 
     stdFileUtil_MkDir("mods");

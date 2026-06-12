@@ -130,6 +130,9 @@ void std3D_DrawUIBitmap(stdBitmap* pBmp, int mipIdx, flex_t dstX, flex_t dstY, r
 void std3D_DrawUIClearedRect(uint8_t palIdx, rdRect* dstRect);
 void std3D_DrawUIClearedRectRGBA(uint8_t color_r, uint8_t color_g, uint8_t color_b, uint8_t color_a, rdRect* dstRect);
 int std3D_IsReady();
+int std3D_ShouldFitMenu4x3(double winW, double winH);
+void std3D_FitMenu4x3(double winW, double winH, double *outX, double *outY, double *outW, double *outH);
+void std3D_ComputeMenuRect(double winW, double winH, double *outX, double *outY, double *outW, double *outH);
 
 #ifdef __cplusplus
 }
