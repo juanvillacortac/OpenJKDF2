@@ -1554,9 +1554,17 @@ void jkMain_FixRes()
     uint32_t newH = Window_ySize;
 
     if (openjkdf2_IsHandheld()) {
-        /* Menu/HUD buffer stays 640x480; std3D scales to the window. */
-        newW = 640;
-        newH = 480;
+        newW = Window_xSize;
+        newH = Window_ySize;
+
+        Video_modeStruct.viewSizeIdx = 0;
+        Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].xMin = 0;
+        Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].yMin = 0;
+        Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].xMax = newW / 2;
+        Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].yMax = newH / 2;
+#if defined(TARGET_LINUX_GLES)
+        stdDisplay_ResizeOverlayMapBuffer(newW, newH);
+#endif
     } else {
         newW = (uint32_t)((flex_t)Window_xSize * ((480.0*2.0)/Window_ySize));
         newH = 480*2;

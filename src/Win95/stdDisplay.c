@@ -129,6 +129,14 @@ int stdDisplay_EnsureMenuGLTextures(void)
         return 0;
     }
 
+    {
+        uint32_t overlayW = Video_overlayMapBuffer.format.width;
+        uint32_t overlayH = Video_overlayMapBuffer.format.height;
+        if (!overlayW || !overlayH) {
+            overlayW = newW;
+            overlayH = newH;
+        }
+
     stdDisplay_InvalidateMenuGLTextures();
 
     openjkdf2_trace("stdDisplay_EnsureMenuGLTextures: create textures");
@@ -145,12 +153,36 @@ int stdDisplay_EnsureMenuGLTextures(void)
     glBindTexture(GL_TEXTURE_2D, Video_overlayTexId);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, newW);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, newW, newH, 0, GL_RED, GL_UNSIGNED_BYTE, overlayPixels);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, overlayW);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, overlayW, overlayH, 0, GL_RED, GL_UNSIGNED_BYTE, overlayPixels);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    }
 
     stdDisplay_menuTexturesValid = 1;
     openjkdf2_trace("stdDisplay_EnsureMenuGLTextures: done");
+    return 1;
+}
+
+int stdDisplay_ResizeOverlayMapBuffer(uint32_t w, uint32_t h)
+{
+    if (!w || !h) {
+        return 0;
+    }
+    if (Video_overlayMapBuffer.format.width == w && Video_overlayMapBuffer.format.height == h) {
+        return 1;
+    }
+
+    stdDisplay_Free8bppBuffer(&Video_overlayMapBuffer);
+    if (!stdDisplay_Alloc8bppBuffer(&Video_overlayMapBuffer, w, h)) {
+        openjkdf2_trace("stdDisplay_ResizeOverlayMapBuffer: alloc failed");
+        return 0;
+    }
+
+    if (Video_overlayTexId) {
+        glDeleteTextures(1, &Video_overlayTexId);
+        Video_overlayTexId = 0;
+    }
+    stdDisplay_menuTexturesValid = 0;
     return 1;
 }
 #else

@@ -212,15 +212,15 @@ void jkPlayer_StartupVars()
 // Added: Clean reset
 static void jkPlayer_SyncHandheldHudLayout(void)
 {
-    const int layoutW = 640;
-    const int layoutH = 480;
+    const int layoutW = Window_xSize > 0 ? (int)Window_xSize : 640;
+    const int layoutH = Window_ySize > 0 ? (int)Window_ySize : 480;
     int vsIdx = Video_modeStruct.viewSizeIdx;
 
     if (vsIdx < 0 || vsIdx >= 11)
-        vsIdx = 5;
+        vsIdx = 0;
 
-    Video_modeStruct.aViewSizes[vsIdx].xMin = layoutW;
-    Video_modeStruct.aViewSizes[vsIdx].yMin = layoutH;
+    Video_modeStruct.aViewSizes[vsIdx].xMin = 0;
+    Video_modeStruct.aViewSizes[vsIdx].yMin = 0;
     Video_modeStruct.aViewSizes[vsIdx].xMax = layoutW / 2;
     Video_modeStruct.aViewSizes[vsIdx].yMax = layoutH / 2;
 
@@ -265,20 +265,13 @@ void jkPlayer_ApplyHandheldDefaults(void)
         jkPlayer_enableVsync = 0;
     }
 
-    /* Perfiles de PC suelen traer hudScale=2; en 720x480 desborda el HUD derecho. */
+    /* hudScale is an optional legibility zoom only; layout coords match the window. */
+    jkPlayer_hudScale = 1.0f;
     if (hud_env && hud_env[0]) {
         float v = (float)atof(hud_env);
         if (v >= 0.5f && v <= 2.0f) {
             jkPlayer_hudScale = v;
         }
-    } else if (Window_ySize > 0) {
-        jkPlayer_hudScale = (float)Window_ySize / 480.0f;
-        if (jkPlayer_hudScale < 0.5f)
-            jkPlayer_hudScale = 0.5f;
-        if (jkPlayer_hudScale > 1.5f)
-            jkPlayer_hudScale = 1.5f;
-    } else {
-        jkPlayer_hudScale = 1.0f;
     }
 
     jkPlayer_crosshairScale = 1.0f;

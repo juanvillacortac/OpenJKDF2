@@ -52,13 +52,8 @@ void jkHud_DrawGPU();
 
 static void jkHud_GetLayoutSize(int *outW, int *outH)
 {
-    if (Video_pMenuBuffer && Video_pMenuBuffer->format.width > 0) {
-        *outW = Video_pMenuBuffer->format.width;
-        *outH = Video_pMenuBuffer->format.height;
-    } else {
-        *outW = Video_format.width;
-        *outH = Video_format.height;
-    }
+    *outW = Video_format.width > 0 ? Video_format.width : 640;
+    *outH = Video_format.height > 0 ? Video_format.height : 480;
 }
 
 int jkHud_Startup()

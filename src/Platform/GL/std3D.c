@@ -1542,26 +1542,18 @@ void std3D_DrawMenu()
         GL_tmpVerticesAmt = 0;
         GL_tmpTrisAmt = 0;
 
+#if !defined(TARGET_LINUX_GLES)
         // Main View
         std3D_DrawMenuSubrect(0, 128, menu_w, menu_h-256, 0, 128, 0.0);
 
         float hudScale = Window_ySize / 480.0;
 
-        /*if (menu_w >= 3600)
-            hudScale = 4;
-        else if (menu_w >= 1800)
-            hudScale = 3;
-        else if (menu_w >= 1200)
-            hudScale = 2;*/
-
         // Left and Right HUD
         std3D_DrawMenuSubrect(0, menu_h - 64, 64, 64, 0, Window_ySize - 64*hudScale, hudScale);
         std3D_DrawMenuSubrect(menu_w - 64, menu_h - 64, 64, 64, Window_xSize - 64*hudScale, Window_ySize - 64*hudScale, hudScale);
 
-#if !defined(TARGET_LINUX_GLES)
         // Items (inventory is drawn via std3D_DrawUIBitmap on GLES)
         std3D_DrawMenuSubrect((menu_w / 2) - 128, menu_h - 64, 256, 64, (Window_xSize / 2) - (128*hudScale), Window_ySize - 64*hudScale, hudScale);
-#endif
 
         // Text
         float textScale = hudScale;
@@ -1575,6 +1567,7 @@ void std3D_DrawMenu()
 
         // Active forcepowers/items
         std3D_DrawMenuSubrect(menu_w - 48, 0, 48, 128, Window_xSize - (48*hudScale), 0, hudScale);
+#endif
     }
 
     glActiveTexture(GL_TEXTURE0 + 4);
@@ -1732,8 +1725,8 @@ void std3D_DrawMapOverlay()
         return;
     }
 
-    menu_w = Video_menuBuffer.format.width;
-    menu_h = Video_menuBuffer.format.height;
+    menu_w = Video_overlayMapBuffer.format.width;
+    menu_h = Video_overlayMapBuffer.format.height;
 
     GL_tmpVerticesAmt = 0;
     GL_tmpTrisAmt = 0;
@@ -1849,23 +1842,40 @@ void std3D_DrawMapOverlay()
     glDisableVertexAttribArray(programMenu_attribute_coord3d);
 }
 
+static void std3D_GetUILayoutSize(double *outW, double *outH)
+{
+    if (jkGuiBuildMulti_bRendering || jkCutscene_isRendering) {
+        *outW = 640.0;
+        *outH = 480.0;
+        return;
+    }
+    if (jkGame_isDDraw && Video_format.width > 0 && Video_format.height > 0) {
+        *outW = (double)Video_format.width;
+        *outH = (double)Video_format.height;
+        return;
+    }
+    *outW = (double)Video_menuBuffer.format.width;
+    *outH = (double)Video_menuBuffer.format.height;
+    if (*outW <= 0.0 || *outH <= 0.0) {
+        *outW = 640.0;
+        *outH = 480.0;
+    }
+}
+
 void std3D_DrawUIBitmapRGBA(stdBitmap* pBmp, int mipIdx, flex_t dstX, flex_t dstY, rdRect* srcRect, flex_t scaleX, flex_t scaleY, int bAlphaOverwrite, uint8_t color_r, uint8_t color_g, uint8_t color_b, uint8_t color_a)
 {
-    float internalWidth = Video_menuBuffer.format.width;
-    float internalHeight = Video_menuBuffer.format.height;
+    double internalWidth;
+    double internalHeight;
 
     if (!pBmp) return;
     if (!pBmp->abLoadedToGPU[mipIdx]) {
         std3D_AddBitmapToTextureCache(pBmp, mipIdx, !(pBmp->palFmt & 1), 0);
     }
 
-    if (jkGuiBuildMulti_bRendering) {
-        internalWidth = 640.0;
-        internalHeight = 480.0;
-    }
+    std3D_GetUILayoutSize(&internalWidth, &internalHeight);
 
-    double scaleX_ = (double)Window_xSize/(double)internalWidth;
-    double scaleY_ = (double)Window_ySize/(double)internalHeight;
+    double scaleX_ = (double)Window_xSize/internalWidth;
+    double scaleY_ = (double)Window_ySize/internalHeight;
 
     dstX *= scaleX_;
     dstY *= scaleY_;
@@ -2008,16 +2018,13 @@ void std3D_DrawUIClearedRectRGBA(uint8_t color_r, uint8_t color_g, uint8_t color
     double dstX = dstRect->x;
     double dstY = dstRect->y;
 
-    float internalWidth = Video_menuBuffer.format.width;
-    float internalHeight = Video_menuBuffer.format.height;
+    double internalWidth;
+    double internalHeight;
+    std3D_GetUILayoutSize(&internalWidth, &internalHeight);
     if (!internalWidth || !internalHeight) return;
 
-    if (jkGuiBuildMulti_bRendering) {
-        internalWidth = 640.0;
-        internalHeight = 480.0;
-    }
-    double scaleX = (double)Window_xSize/(double)internalWidth;
-    double scaleY = (double)Window_ySize/(double)internalHeight;
+    double scaleX = (double)Window_xSize/internalWidth;
+    double scaleY = (double)Window_ySize/internalHeight;
 
     dstX *= scaleX;
     dstY *= scaleY;

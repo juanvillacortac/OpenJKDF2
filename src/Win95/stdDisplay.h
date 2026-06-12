@@ -109,6 +109,10 @@ void stdDisplay_SyncMenuBufferFormat(void);
 uint8_t* stdDisplay_VBufferPixels(stdVBuffer *vbuf);
 int stdDisplay_EnsureMenuGLTextures(void);
 
+#if defined(TARGET_LINUX_GLES)
+int stdDisplay_ResizeOverlayMapBuffer(uint32_t w, uint32_t h);
+#endif
+
 int stdDisplay_SetCooperativeLevel(uint32_t a);
 int stdDisplay_DrawAndFlipGdi(uint32_t a);
 void stdDisplay_422A50();
