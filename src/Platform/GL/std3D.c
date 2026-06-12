@@ -32,6 +32,8 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 extern SDL_Window *displayWindow;
 extern SDL_GLContext glWindowContext;
 
+static int std3D_glContextCurrent;
+
 static int std3D_EnsureGLContext(void)
 {
     if (!displayWindow || !glWindowContext) {
@@ -39,13 +41,47 @@ static int std3D_EnsureGLContext(void)
             (void*)displayWindow, (void*)glWindowContext);
         return 0;
     }
+    if (std3D_glContextCurrent)
+        return 1;
     if (SDL_GL_MakeCurrent(displayWindow, glWindowContext) != 0) {
         openjkdf2_trace_fmt("std3D_EnsureGLContext: MakeCurrent failed: %s", SDL_GetError());
         return 0;
     }
+    std3D_glContextCurrent = 1;
     return 1;
 }
+
+void std3D_InvalidateGLContext(void)
+{
+    std3D_glContextCurrent = 0;
+}
 #endif
+
+#define STD3D_FB_EXTRA_BLOOM 1
+#define STD3D_FB_EXTRA_SSAO_BLUR 2
+#define STD3D_FB_EXTRA_POSNORM_GBUFFER 8
+
+static size_t std3D_worldVboCap;
+static size_t std3D_worldIboCap;
+static size_t std3D_menuVboCap;
+static size_t std3D_menuIboCap;
+static int std3D_menuBufferDirty = 1;
+
+static void std3D_uploadBuffer(GLuint buf, GLenum target, size_t size, const void *data, size_t *cap)
+{
+    glBindBuffer(target, buf);
+    if (size > *cap) {
+        glBufferData(target, size, data, GL_DYNAMIC_DRAW);
+        *cap = size;
+    } else {
+        glBufferSubData(target, 0, size, data);
+    }
+}
+
+void std3D_MarkMenuBufferDirty(void)
+{
+    std3D_menuBufferDirty = 1;
+}
 
 #define TEX_MODE_TEST 0
 #define TEX_MODE_WORLDPAL 1
@@ -124,7 +160,7 @@ static void* last_overlay = NULL;
 static int std3D_activeFb = 1;
 
 int init_once = 0;
-GLuint programDefault, programMenu;
+GLuint programDefault, programDefaultLite, programMenu;
 GLint attribute_coord3d, attribute_v_color, attribute_v_light, attribute_v_uv, attribute_v_norm;
 GLint uniform_mvp, uniform_tex, uniform_texEmiss, uniform_displacement_map, uniform_tex_mode, uniform_blend_mode, uniform_worldPalette, uniform_worldPaletteLights;
 GLint uniform_tint, uniform_filter, uniform_fade, uniform_add, uniform_emissiveFactor, uniform_albedoFactor;
@@ -135,6 +171,7 @@ GLint programMenu_uniform_mvp, programMenu_uniform_tex, programMenu_uniform_disp
 
 std3DSimpleTexStage std3D_uiProgram;
 std3DSimpleTexStage std3D_texFboStage;
+std3DSimpleTexStage std3D_texFboSceneStage;
 std3DSimpleTexStage std3D_blurStage;
 std3DSimpleTexStage std3D_ssaoStage;
 std3DSimpleTexStage std3D_ssaoMixStage;
@@ -298,37 +335,39 @@ void std3D_generateFramebuffer(int32_t width, int32_t height, std3DFramebuffer* 
     // Attach fbTex to our currently bound framebuffer fb
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, pFb->tex1, 0);
 
-    // Set up our position fb texture
-    glGenTextures(1, &pFb->tex2);
-    glBindTexture(GL_TEXTURE_2D, pFb->tex2);
+    pFb->tex2 = 0;
+    pFb->tex3 = 0;
+    if (jkPlayer_enableSSAO) {
+        // Set up our position fb texture
+        glGenTextures(1, &pFb->tex2);
+        glBindTexture(GL_TEXTURE_2D, pFb->tex2);
 #if defined(TARGET_LINUX_GLES)
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 #else
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 #endif
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, pFb->tex2, 0);
 
-    // Attach fbTex to our currently bound framebuffer fb
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, pFb->tex2, 0);
-
-    // Set up our normal fb texture
-    glGenTextures(1, &pFb->tex3);
-    glBindTexture(GL_TEXTURE_2D, pFb->tex3);
+        // Set up our normal fb texture
+        glGenTextures(1, &pFb->tex3);
+        glBindTexture(GL_TEXTURE_2D, pFb->tex3);
 #if defined(TARGET_LINUX_GLES)
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 #else
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 #endif
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    
-    // Attach fbTex to our currently bound framebuffer fb
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, pFb->tex3, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, pFb->tex3, 0);
+
+        pFb->enable_extra |= STD3D_FB_EXTRA_POSNORM_GBUFFER;
+    }
 
     // Set up our render buffer
     glGenRenderbuffers(1, &pFb->rbo);
@@ -346,14 +385,12 @@ void std3D_generateFramebuffer(int32_t width, int32_t height, std3DFramebuffer* 
     {
         std3D_generateIntermediateFbo(width, height, &pFb->ssaoBlur1, 0);
         std3D_generateIntermediateFbo(pFb->ssaoBlur1.w/2, pFb->ssaoBlur1.h/2, &pFb->ssaoBlur2, 0);
-        //std3D_generateIntermediateFbo(pFb->ssaoBlur2.w/2, pFb->ssaoBlur2.h/2, &pFb->ssaoBlur3, 0);
-
-        pFb->enable_extra |= 2;
+        pFb->enable_extra |= STD3D_FB_EXTRA_SSAO_BLUR;
     }
 
     if (jkPlayer_enableBloom)
     {
-        pFb->enable_extra |= 1;
+        pFb->enable_extra |= STD3D_FB_EXTRA_BLOOM;
         std3D_generateIntermediateFbo(width, height, &pFb->blur1, 1);
         //std3D_generateIntermediateFbo(width, height, &pFb->blurBlend, 1);
         std3D_generateIntermediateFbo(pFb->blur1.w/4, pFb->blur1.h/4, &pFb->blur2, 1);
@@ -390,8 +427,10 @@ void std3D_deleteFramebuffer(std3DFramebuffer* pFb)
     glDeleteFramebuffers(1, &pFb->fbo);
     glDeleteTextures(1, &pFb->tex0);
     glDeleteTextures(1, &pFb->tex1);
-    glDeleteTextures(1, &pFb->tex2);
-    glDeleteTextures(1, &pFb->tex3);
+    if (pFb->tex2)
+        glDeleteTextures(1, &pFb->tex2);
+    if (pFb->tex3)
+        glDeleteTextures(1, &pFb->tex3);
     glDeleteRenderbuffers(1, &pFb->rbo);
 
     std3D_deleteIntermediateFbo(&pFb->blur1);
@@ -472,6 +511,34 @@ GLint std3D_tryFindUniform(GLuint program, const char* uniform_name)
     return out;
 }
 
+static void std3D_bindDefaultProgram(int use_full_mrt)
+{
+    GLuint prog = use_full_mrt ? programDefault : programDefaultLite;
+
+    glUseProgram(prog);
+    attribute_coord3d = std3D_tryFindAttribute(prog, "coord3d");
+    attribute_v_color = std3D_tryFindAttribute(prog, "v_color");
+    attribute_v_light = std3D_tryFindAttribute(prog, "v_light");
+    attribute_v_uv = std3D_tryFindAttribute(prog, "v_uv");
+    uniform_mvp = std3D_tryFindUniform(prog, "mvp");
+    uniform_tex = std3D_tryFindUniform(prog, "tex");
+    uniform_texEmiss = std3D_tryFindUniform(prog, "texEmiss");
+    uniform_worldPalette = std3D_tryFindUniform(prog, "worldPalette");
+    uniform_worldPaletteLights = std3D_tryFindUniform(prog, "worldPaletteLights");
+    uniform_displacement_map = std3D_tryFindUniform(prog, "displacement_map");
+    uniform_tex_mode = std3D_tryFindUniform(prog, "tex_mode");
+    uniform_blend_mode = std3D_tryFindUniform(prog, "blend_mode");
+    uniform_tint = std3D_tryFindUniform(prog, "colorEffects_tint");
+    uniform_filter = std3D_tryFindUniform(prog, "colorEffects_filter");
+    uniform_fade = std3D_tryFindUniform(prog, "colorEffects_fade");
+    uniform_add = std3D_tryFindUniform(prog, "colorEffects_add");
+    uniform_emissiveFactor = std3D_tryFindUniform(prog, "emissiveFactor");
+    uniform_albedoFactor = std3D_tryFindUniform(prog, "albedoFactor");
+    uniform_light_mult = std3D_tryFindUniform(prog, "light_mult");
+    uniform_displacement_factor = std3D_tryFindUniform(prog, "displacement_factor");
+    uniform_iResolution = std3D_tryFindUniform(prog, "iResolution");
+}
+
 bool std3D_loadSimpleTexProgram(const char* fpath_base, std3DSimpleTexStage* pOut)
 {
     if (!pOut) return false;
@@ -539,10 +606,13 @@ int init_resources()
     
     if ((programDefault = std3D_loadProgram("shaders/default")) == 0) return false;
     openjkdf2_trace("init_resources: shader default ok");
+    if ((programDefaultLite = std3D_loadProgram("shaders/default_lite")) == 0) return false;
+    openjkdf2_trace("init_resources: shader default_lite ok");
     if ((programMenu = std3D_loadProgram("shaders/menu")) == 0) return false;
     openjkdf2_trace("init_resources: shader menu ok");
     if (!std3D_loadSimpleTexProgram("shaders/ui", &std3D_uiProgram)) return false;
     if (!std3D_loadSimpleTexProgram("shaders/texfbo", &std3D_texFboStage)) return false;
+    if (!std3D_loadSimpleTexProgram("shaders/texfbo_scene", &std3D_texFboSceneStage)) return false;
     if (!std3D_loadSimpleTexProgram("shaders/blur", &std3D_blurStage)) return false;
     if (!std3D_loadSimpleTexProgram("shaders/ssao", &std3D_ssaoStage)) return false;
     if (!std3D_loadSimpleTexProgram("shaders/ssao_mix", &std3D_ssaoMixStage)) return false;
@@ -708,6 +778,15 @@ int init_resources()
     glGenBuffers(1, &menu_vbo_all);
     glGenBuffers(1, &menu_ibo_triangle);
 
+    std3D_worldVboCap = 0;
+    std3D_worldIboCap = 0;
+    std3D_menuVboCap = 0;
+    std3D_menuIboCap = 0;
+    std3D_uploadBuffer(world_vbo_all, GL_ARRAY_BUFFER, STD3D_MAX_VERTICES * sizeof(D3DVERTEX), NULL, &std3D_worldVboCap);
+    std3D_uploadBuffer(world_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, sizeof(GLushort) * 3 * STD3D_MAX_TRIS, NULL, &std3D_worldIboCap);
+    std3D_uploadBuffer(menu_vbo_all, GL_ARRAY_BUFFER, STD3D_MAX_UI_VERTICES * sizeof(D3DVERTEX), NULL, &std3D_menuVboCap);
+    std3D_uploadBuffer(menu_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, sizeof(GLushort) * 3 * STD3D_MAX_UI_TRIS, NULL, &std3D_menuIboCap);
+
     has_initted = true;
     openjkdf2_trace("init_resources: done");
     return true;
@@ -757,6 +836,7 @@ void std3D_FreeResources()
     std3D_PurgeEntireTextureCache();
 
     glDeleteProgram(programDefault);
+    glDeleteProgram(programDefaultLite);
     glDeleteProgram(programMenu);
     std3D_deleteFramebuffer(&std3D_framebuffers[0]);
     std3D_deleteFramebuffer(&std3D_framebuffers[1]);
@@ -805,6 +885,13 @@ void std3D_FreeResources()
 
     glDeleteBuffers(1, &menu_vbo_all);
 
+    std3D_worldVboCap = 0;
+    std3D_worldIboCap = 0;
+    std3D_menuVboCap = 0;
+    std3D_menuIboCap = 0;
+#if defined(TARGET_LINUX_GLES)
+    std3D_InvalidateGLContext();
+#endif
     std3D_bReinitHudElements = 1;
 
     has_initted = false;
@@ -839,12 +926,18 @@ int std3D_StartScene()
     int32_t tex_w = (int32_t)((double)Window_xSize * supersample_level);
     int32_t tex_h = (int32_t)((double)Window_ySize * supersample_level);
 
-    if (tex_w != std3D_pFb->w || tex_h != std3D_pFb->h 
-        || (!(std3D_pFb->enable_extra & 1) && jkPlayer_enableBloom)
-        || (!(std3D_pFb->enable_extra & 2) && jkPlayer_enableSSAO))
     {
-        std3D_deleteFramebuffer(std3D_pFb);
-        std3D_generateFramebuffer(tex_w, tex_h, std3D_pFb);
+        int want_posnorm = jkPlayer_enableSSAO ? STD3D_FB_EXTRA_POSNORM_GBUFFER : 0;
+        int have_posnorm = std3D_pFb->enable_extra & STD3D_FB_EXTRA_POSNORM_GBUFFER;
+
+        if (tex_w != std3D_pFb->w || tex_h != std3D_pFb->h
+            || (!(std3D_pFb->enable_extra & STD3D_FB_EXTRA_BLOOM) && jkPlayer_enableBloom)
+            || (!(std3D_pFb->enable_extra & STD3D_FB_EXTRA_SSAO_BLUR) && jkPlayer_enableSSAO)
+            || have_posnorm != want_posnorm)
+        {
+            std3D_deleteFramebuffer(std3D_pFb);
+            std3D_generateFramebuffer(tex_w, tex_h, std3D_pFb);
+        }
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, std3D_pFb->fbo);
@@ -914,7 +1007,7 @@ int std3D_StartScene()
 
     // Describe our vertices array to OpenGL (it can't guess its format automatically)
     glBindBuffer(GL_ARRAY_BUFFER, world_vbo_all);
-    glBufferData(GL_ARRAY_BUFFER, 1 * sizeof(D3DVERTEX), GL_tmpVertices, GL_STREAM_DRAW);
+    std3D_uploadBuffer(world_vbo_all, GL_ARRAY_BUFFER, 1 * sizeof(D3DVERTEX), GL_tmpVertices, &std3D_worldVboCap);
     glVertexAttribPointer(
         attribute_coord3d, // attribute
         3,                 // number of elements per vertex, here (x,y,z)
@@ -1403,13 +1496,14 @@ void std3D_DrawMenu()
     
     glActiveTexture(GL_TEXTURE0 + 0);
     glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
-    {
+    if (std3D_menuBufferDirty) {
         uint8_t *menuPixels = stdDisplay_VBufferPixels(&Video_menuBuffer);
         if (menuPixels) {
             glPixelStorei(GL_UNPACK_ROW_LENGTH, Video_menuBuffer.format.width);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, Video_menuBuffer.format.width, Video_menuBuffer.format.height, GL_RED, GL_UNSIGNED_BYTE, menuPixels);
             glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
         }
+        std3D_menuBufferDirty = 0;
     }
 
     //GLushort data_elements[32 * 3];
@@ -1423,7 +1517,7 @@ void std3D_DrawMenu()
     D3DVERTEX* vertexes = GL_tmpVertices;
 
     glBindBuffer(GL_ARRAY_BUFFER, menu_vbo_all);
-    glBufferData(GL_ARRAY_BUFFER, GL_tmpVerticesAmt * sizeof(D3DVERTEX), GL_tmpVertices, GL_STREAM_DRAW);
+    std3D_uploadBuffer(menu_vbo_all, GL_ARRAY_BUFFER, GL_tmpVerticesAmt * sizeof(D3DVERTEX), GL_tmpVertices, &std3D_menuVboCap);
     glVertexAttribPointer(
         programMenu_attribute_coord3d, // attribute
         3,                 // number of elements per vertex, here (x,y,z)
@@ -1500,7 +1594,7 @@ void std3D_DrawMenu()
     }
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, menu_ibo_triangle);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), menu_data_elements, GL_STREAM_DRAW);
+    std3D_uploadBuffer(menu_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), menu_data_elements, &std3D_menuIboCap);
 
     int tris_size = 0;  
     glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &tris_size);
@@ -1570,7 +1664,7 @@ void std3D_DrawMapOverlay()
 
     D3DVERTEX* vertexes = GL_tmpVertices;
     glBindBuffer(GL_ARRAY_BUFFER, menu_vbo_all);
-    glBufferData(GL_ARRAY_BUFFER, GL_tmpVerticesAmt * sizeof(D3DVERTEX), GL_tmpVertices, GL_STREAM_DRAW);
+    std3D_uploadBuffer(menu_vbo_all, GL_ARRAY_BUFFER, GL_tmpVerticesAmt * sizeof(D3DVERTEX), GL_tmpVertices, &std3D_menuVboCap);
     glVertexAttribPointer(
         programMenu_attribute_coord3d, // attribute
         3,                 // number of elements per vertex, here (x,y,z)
@@ -1639,7 +1733,7 @@ void std3D_DrawMapOverlay()
     }
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, menu_ibo_triangle);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), menu_data_elements, GL_STREAM_DRAW);
+    std3D_uploadBuffer(menu_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), menu_data_elements, &std3D_menuIboCap);
 
     int tris_size = 0;  
     glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &tris_size);
@@ -2001,7 +2095,7 @@ void std3D_DrawUIRenderList()
     glEnableVertexAttribArray(std3D_uiProgram.attribute_v_uv);
 
     glBindBuffer(GL_ARRAY_BUFFER, menu_vbo_all);
-    glBufferData(GL_ARRAY_BUFFER, GL_tmpUIVerticesAmt * sizeof(D3DVERTEX), GL_tmpUIVertices, GL_STREAM_DRAW);
+    std3D_uploadBuffer(menu_vbo_all, GL_ARRAY_BUFFER, GL_tmpUIVerticesAmt * sizeof(D3DVERTEX), GL_tmpUIVertices, &std3D_menuVboCap);
     glVertexAttribPointer(
         std3D_uiProgram.attribute_coord3d, // attribute
         3,                 // number of elements per vertex, here (x,y,z)
@@ -2051,7 +2145,7 @@ void std3D_DrawUIRenderList()
     }
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, menu_ibo_triangle);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GL_tmpUITrisAmt * 3 * sizeof(GLushort), menu_data_elements, GL_STREAM_DRAW);
+    std3D_uploadBuffer(menu_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, GL_tmpUITrisAmt * 3 * sizeof(GLushort), menu_data_elements, &std3D_menuIboCap);
     
     int do_batch = 0;
 
@@ -2257,7 +2351,7 @@ void std3D_DrawSimpleTex(std3DSimpleTexStage* pStage, std3DIntermediateFbo* pFbo
     glEnableVertexAttribArray(pStage->attribute_v_uv);
 
     glBindBuffer(GL_ARRAY_BUFFER, menu_vbo_all);
-    glBufferData(GL_ARRAY_BUFFER, GL_tmpVerticesAmt * sizeof(D3DVERTEX), GL_tmpVertices, GL_STREAM_DRAW);
+    std3D_uploadBuffer(menu_vbo_all, GL_ARRAY_BUFFER, GL_tmpVerticesAmt * sizeof(D3DVERTEX), GL_tmpVertices, &std3D_menuVboCap);
     glVertexAttribPointer(
         programMenu_attribute_coord3d, // attribute
         3,                 // number of elements per vertex, here (x,y,z)
@@ -2300,11 +2394,8 @@ void std3D_DrawSimpleTex(std3DSimpleTexStage* pStage, std3DIntermediateFbo* pFbo
     }
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, menu_ibo_triangle);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), data_elements, GL_STREAM_DRAW);
-
-    int tris_size;  
-    glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &tris_size);
-    glDrawElements(GL_TRIANGLES, tris_size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
+    std3D_uploadBuffer(menu_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), data_elements, &std3D_menuIboCap);
+    glDrawElements(GL_TRIANGLES, GL_tmpTrisAmt * 3, GL_UNSIGNED_SHORT, 0);
 
     glDisableVertexAttribArray(pStage->attribute_v_uv);
     glDisableVertexAttribArray(pStage->attribute_v_color);
@@ -2313,6 +2404,99 @@ void std3D_DrawSimpleTex(std3DSimpleTexStage* pStage, std3DIntermediateFbo* pFbo
     //free(data_elements);
         
     //glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+static void std3D_DrawSceneComposite(std3DIntermediateFbo *pFbo, GLuint albedoTex, GLuint emissiveTex, flex_t gamma)
+{
+    std3DSimpleTexStage *pStage = &std3D_texFboSceneStage;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, pFbo->fbo);
+    glDepthFunc(GL_ALWAYS);
+    glUseProgram(pStage->program);
+
+    GL_tmpVertices[0].x = 0.0f;
+    GL_tmpVertices[0].y = 0.0f;
+    GL_tmpVertices[0].z = 0.0f;
+    GL_tmpVertices[0].tu = 0.0f;
+    GL_tmpVertices[0].tv = 1.0f;
+    GL_tmpVertices[0].color = 0xFFFFFFFF;
+
+    GL_tmpVertices[1].x = 0.0f;
+    GL_tmpVertices[1].y = (float)pFbo->h;
+    GL_tmpVertices[1].z = 0.0f;
+    GL_tmpVertices[1].tu = 0.0f;
+    GL_tmpVertices[1].tv = 0.0f;
+    GL_tmpVertices[1].color = 0xFFFFFFFF;
+
+    GL_tmpVertices[2].x = (float)pFbo->w;
+    GL_tmpVertices[2].y = (float)pFbo->h;
+    GL_tmpVertices[2].z = 0.0f;
+    GL_tmpVertices[2].tu = 1.0f;
+    GL_tmpVertices[2].tv = 0.0f;
+    GL_tmpVertices[2].color = 0xFFFFFFFF;
+
+    GL_tmpVertices[3].x = (float)pFbo->w;
+    GL_tmpVertices[3].y = 0.0f;
+    GL_tmpVertices[3].z = 0.0f;
+    GL_tmpVertices[3].tu = 1.0f;
+    GL_tmpVertices[3].tv = 1.0f;
+    GL_tmpVertices[3].color = 0xFFFFFFFF;
+
+    GL_tmpTris[0].v1 = 1;
+    GL_tmpTris[0].v2 = 0;
+    GL_tmpTris[0].v3 = 2;
+    GL_tmpTris[1].v1 = 0;
+    GL_tmpTris[1].v2 = 3;
+    GL_tmpTris[1].v3 = 2;
+    GL_tmpVerticesAmt = 4;
+    GL_tmpTrisAmt = 2;
+
+    glActiveTexture(GL_TEXTURE0 + 0);
+    glBindTexture(GL_TEXTURE_2D, albedoTex);
+    glActiveTexture(GL_TEXTURE0 + 1);
+    glBindTexture(GL_TEXTURE_2D, emissiveTex);
+
+    {
+        float scaleX = 1.0f / ((float)pFbo->w / 2.0f);
+        float scaleY = 1.0f / ((float)pFbo->h / 2.0f);
+        float d3dmat[16] = {
+            scaleX, 0, 0, 0,
+            0, -scaleY, 0, 0,
+            0, 0, 1, 0,
+            -((float)pFbo->w / 2.0f) * scaleX, ((float)pFbo->h / 2.0f) * scaleY, -1, 1
+        };
+        glUniformMatrix4fv(pStage->uniform_mvp, 1, GL_FALSE, d3dmat);
+        glViewport(0, 0, pFbo->w, pFbo->h);
+        glUniform2f(pStage->uniform_iResolution, (float)pFbo->iw, (float)pFbo->ih);
+        glUniform1i(pStage->uniform_tex, 0);
+        glUniform1i(pStage->uniform_tex2, 1);
+        glUniform1f(pStage->uniform_param3, gamma);
+    }
+
+    glEnableVertexAttribArray(pStage->attribute_coord3d);
+    glEnableVertexAttribArray(pStage->attribute_v_color);
+    glEnableVertexAttribArray(pStage->attribute_v_uv);
+
+    glBindBuffer(GL_ARRAY_BUFFER, menu_vbo_all);
+    std3D_uploadBuffer(menu_vbo_all, GL_ARRAY_BUFFER, GL_tmpVerticesAmt * sizeof(D3DVERTEX), GL_tmpVertices, &std3D_menuVboCap);
+    glVertexAttribPointer(pStage->attribute_coord3d, 3, GL_FLOAT, GL_FALSE, sizeof(D3DVERTEX), (GLvoid*)offsetof(D3DVERTEX, x));
+    glVertexAttribPointer(pStage->attribute_v_color, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(D3DVERTEX), (GLvoid*)offsetof(D3DVERTEX, color));
+    glVertexAttribPointer(pStage->attribute_v_uv, 2, GL_FLOAT, GL_FALSE, sizeof(D3DVERTEX), (GLvoid*)offsetof(D3DVERTEX, tu));
+
+    GLushort data_elements[32 * 3];
+    for (int j = 0; j < GL_tmpTrisAmt; j++) {
+        data_elements[(j * 3) + 0] = GL_tmpTris[j].v1;
+        data_elements[(j * 3) + 1] = GL_tmpTris[j].v2;
+        data_elements[(j * 3) + 2] = GL_tmpTris[j].v3;
+    }
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, menu_ibo_triangle);
+    std3D_uploadBuffer(menu_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), data_elements, &std3D_menuIboCap);
+    glDrawElements(GL_TRIANGLES, GL_tmpTrisAmt * 3, GL_UNSIGNED_SHORT, 0);
+
+    glDisableVertexAttribArray(pStage->attribute_v_uv);
+    glDisableVertexAttribArray(pStage->attribute_v_color);
+    glDisableVertexAttribArray(pStage->attribute_coord3d);
 }
 
 void std3D_DrawSceneFbo()
@@ -2324,7 +2508,6 @@ void std3D_DrawSceneFbo()
 
     glBindFramebuffer(GL_FRAMEBUFFER, std3D_pFb->window.fbo);
     Window_BeginScreenDraw();
-    glClear( GL_COLOR_BUFFER_BIT );
 
     static float frameNum = 1.0;
     //frameNum += (rand() % 16);
@@ -2379,8 +2562,11 @@ void std3D_DrawSceneFbo()
     if (!draw_ssao)
     {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        std3D_DrawSimpleTex(&std3D_texFboStage, &std3D_pFb->window, std3D_pFb->tex0, 0, 0, 1.0, 1.0, jkPlayer_gamma, 0);
-        //std3D_DrawSimpleTex(&std3D_texFboStage, &std3D_pFb->window, std3D_pFb->tex1, 0, 0, 0.0, 1.0, jkPlayer_gamma, 0); // test emission output
+        if (!draw_bloom) {
+            std3D_DrawSceneComposite(&std3D_pFb->window, std3D_pFb->tex0, std3D_pFb->tex1, jkPlayer_gamma);
+        } else {
+            std3D_DrawSimpleTex(&std3D_texFboStage, &std3D_pFb->window, std3D_pFb->tex0, 0, 0, 1.0, 1.0, jkPlayer_gamma, 0);
+        }
     }
     else
     {
@@ -2395,7 +2581,7 @@ void std3D_DrawSceneFbo()
     }
 
     glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA);
-    if (!draw_bloom)
+    if (!draw_bloom && draw_ssao)
         std3D_DrawSimpleTex(&std3D_texFboStage, &std3D_pFb->window, std3D_pFb->tex1, 0, 0, 1.0, 1.0, jkPlayer_gamma, 0);
 
     if (draw_bloom)
@@ -2510,10 +2696,15 @@ void std3D_DrawRenderList()
 
     //printf("Draw render list\n");
     glBindFramebuffer(GL_FRAMEBUFFER, std3D_pFb->fbo);
-    glUseProgram(programDefault);
+    std3D_bindDefaultProgram(jkPlayer_enableSSAO);
 
-    GLenum bufs[4] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3};
-    glDrawBuffers(4, bufs);
+    if (jkPlayer_enableSSAO) {
+        GLenum bufs[4] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3};
+        glDrawBuffers(4, bufs);
+    } else {
+        GLenum bufs[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+        glDrawBuffers(2, bufs);
+    }
     
     last_tex = NULL;
 
@@ -2587,7 +2778,7 @@ void std3D_DrawRenderList()
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, world_vbo_all);
-    glBufferData(GL_ARRAY_BUFFER, GL_tmpVerticesAmt * sizeof(D3DVERTEX), vertexes, GL_STREAM_DRAW);
+    std3D_uploadBuffer(world_vbo_all, GL_ARRAY_BUFFER, GL_tmpVerticesAmt * sizeof(D3DVERTEX), vertexes, &std3D_worldVboCap);
     
     glUniform1i(uniform_tex_mode, TEX_MODE_TEST);
     glUniform1i(uniform_blend_mode, 2);
@@ -2667,7 +2858,7 @@ void std3D_DrawRenderList()
     }
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, world_ibo_triangle);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), world_data_elements, GL_STREAM_DRAW);
+    std3D_uploadBuffer(world_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), world_data_elements, &std3D_worldIboCap);
     
     int do_batch = 0;
     
@@ -2847,7 +3038,7 @@ void std3D_DrawRenderList()
     }
     
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, world_ibo_triangle);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GL_tmpLinesAmt * 2 * sizeof(GLushort), world_data_elements, GL_STREAM_DRAW);
+    std3D_uploadBuffer(world_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, GL_tmpLinesAmt * 2 * sizeof(GLushort), world_data_elements, &std3D_worldIboCap);
 
     int lines_size;
     glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &lines_size);

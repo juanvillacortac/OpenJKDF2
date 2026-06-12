@@ -22,6 +22,7 @@ uint8_t* stdDisplay_GetPalette()
 #else
 #include "SDL2_helper.h"
 #include "Platform/trace_gles.h"
+#include "Platform/std3D.h"
 #include <assert.h>
 
 uint8_t* stdDisplay_VBufferPixels(stdVBuffer *vbuf)
@@ -586,6 +587,8 @@ int stdDisplay_VBufferCopy(stdVBuffer *vbuf, stdVBuffer *vbuf2, unsigned int bli
     }
     
     //SDL_BlitSurface(vbuf2->sdlSurface, &srcRect, vbuf->sdlSurface, &dstRect); //TODO error check
+    if (vbuf == &Video_menuBuffer)
+        std3D_MarkMenuBufferDirty();
     return 1;
 }
 
@@ -623,6 +626,9 @@ int stdDisplay_VBufferFill(stdVBuffer *vbuf, int fillColor, rdRect *rect)
     }
     
     //SDL_FillRect(vbuf, &dstRect, fillColor); //TODO error check
+
+    if (vbuf == &Video_menuBuffer)
+        std3D_MarkMenuBufferDirty();
 
     return 1;
 }

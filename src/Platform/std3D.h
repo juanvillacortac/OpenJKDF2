@@ -133,6 +133,10 @@ int std3D_IsReady();
 int std3D_ShouldFitMenu4x3(double winW, double winH);
 void std3D_FitMenu4x3(double winW, double winH, double *outX, double *outY, double *outW, double *outH);
 void std3D_ComputeMenuRect(double winW, double winH, double *outX, double *outY, double *outW, double *outH);
+void std3D_MarkMenuBufferDirty(void);
+#if defined(TARGET_LINUX_GLES)
+void std3D_InvalidateGLContext(void);
+#endif
 
 #ifdef __cplusplus
 }
