@@ -114,12 +114,7 @@ int stdGob_LoadEntry(stdGob *gob, char *fname, int a3, int a4)
     // Added
     _memset(gob->entries, 0, sizeof(stdGobEntry) * gob->numFiles);
 
-    // We're not adding anything so like, keep it small?
-#ifdef TARGET_TWL
-    gob->entriesHashtable = stdHashTable_New(gob->numFiles);
-#else
-    gob->entriesHashtable = stdHashTable_New(1024);
-#endif
+    gob->entriesHashtable = stdHashTable_New(gob->numFiles ? gob->numFiles : 1);
     for (int v4 = 0; v4 < gob->numFiles; v4++)
     {
         pGobHS->fileRead(gob->fhand, &gob->entries[v4], sizeof(stdGobEntry));

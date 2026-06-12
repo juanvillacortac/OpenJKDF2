@@ -31,6 +31,7 @@ MATH_FUNC void jkSaber_UpdateCollision(sithThing *player, int joint, int bSecond
 MATH_FUNC void jkSaber_SpawnSparks(jkPlayerInfo *pPlayerInfo, rdVector3 *pPos, sithSector *psector, int sparkType);
 void jkSaber_Enable(sithThing *pThing, flex_t damage, flex_t bladeLength, flex_t stunDelay);
 void jkSaber_Disable(sithThing *player);
+float jkSaber_GetAmputationRandExponent(void);
 
 //static void (*jkSaber_UpdateCollision)(sithThing *player, int joint) = (void*)jkSaber_UpdateCollision_ADDR;
 

@@ -22,7 +22,10 @@
 #include "Devices/sithSound.h"
 #include "Dss/sithGamesave.h"
 #include "Gameplay/sithEvent.h"
+#include "Gameplay/jkSaber.h"
 #include "Engine/sithPhysics.h"
+
+#include <math.h>
 #include "Gameplay/sithPlayer.h"
 #include "World/sithWorld.h"
 #include "World/sithWeapon.h"
@@ -66,6 +69,13 @@ void sithCogFunction_GetSourceType(sithCog *ctx)
 void sithCogFunction_Rand(sithCog *ctx)
 {
     cog_flex_t val = _frand();
+    float amputation_boost = jkSaber_GetAmputationRandExponent();
+
+    if (amputation_boost > 1.0f
+        && (ctx->trigId == SITH_MESSAGE_DAMAGED || ctx->trigId == SITH_MESSAGE_KILLED)) {
+        val = (cog_flex_t)pow((double)val, (double)amputation_boost);
+    }
+
     sithCogExec_PushFlex(ctx, val);
 }
 

@@ -9,6 +9,7 @@ macro(plat_initialize)
     add_definitions(-D_XOPEN_SOURCE=500)
     add_definitions(-D_DEFAULT_SOURCE)
     add_definitions(-DTARGET_LINUX_GLES)
+    add_definitions(-DSMK_FAST)
 
     include(cmake_modules/plat_feat_full_sdl2.cmake)
 

@@ -3271,29 +3271,43 @@ static int std3D_glesIsRgb1555(stdVBuffer *vbuf)
 static int std3D_glesTryUpload16bppNative(stdVBuffer *vbuf, uint32_t width, uint32_t height, void *pixels, int is_alpha_tex)
 {
     uint32_t row_stride_pixels = vbuf->format.width_in_bytes / 2;
+    GLenum internal_format;
+    GLenum format;
+    GLenum pixel_types[2];
+    int num_pixel_types;
+    int i;
 
     if (!pixels || !width || !height || row_stride_pixels < width) {
         return 0;
     }
 
-    while (glGetError() != GL_NO_ERROR) {}
+    if (!is_alpha_tex && std3D_glesIsRgb565(vbuf)) {
+        internal_format = GL_RGB8;
+        format = GL_RGB;
+        pixel_types[0] = GL_UNSIGNED_SHORT_5_6_5_REV;
+        pixel_types[1] = GL_UNSIGNED_SHORT_5_6_5;
+        num_pixel_types = 2;
+    } else if (is_alpha_tex || std3D_glesIsRgb1555(vbuf)) {
+        internal_format = GL_RGBA8;
+        format = GL_RGBA;
+        pixel_types[0] = GL_UNSIGNED_SHORT_1_5_5_5_REV;
+        pixel_types[1] = GL_UNSIGNED_SHORT_5_5_5_1;
+        num_pixel_types = 2;
+    } else {
+        return 0;
+    }
 
     if (row_stride_pixels != width) {
         glPixelStorei(GL_UNPACK_ROW_LENGTH, row_stride_pixels);
     }
 
-    if (!is_alpha_tex && std3D_glesIsRgb565(vbuf)) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5_REV, pixels);
-    } else if (is_alpha_tex || std3D_glesIsRgb1555(vbuf)) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, pixels);
-    } else {
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-        return 0;
-    }
-
-    if (glGetError() == GL_NO_ERROR) {
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-        return 1;
+    for (i = 0; i < num_pixel_types; i++) {
+        while (glGetError() != GL_NO_ERROR) {}
+        glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, pixel_types[i], pixels);
+        if (glGetError() == GL_NO_ERROR) {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+            return 1;
+        }
     }
 
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);

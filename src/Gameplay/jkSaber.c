@@ -16,13 +16,121 @@
 #include "Engine/sithCollision.h"
 #include "Main/jkSmack.h"
 #include "General/stdString.h"
+#include "Platform/handheld.h"
 
 #include "jk.h"
 
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+
 #define JKSABER_EXTENDTIME (0.3000000)
+
+/* Skews COG Rand() during damaged/killed handlers toward 0 (more amputations). */
+static float jkSaber_amputationRandExponent = 1.0f;
+/* Extra engine-side amputation roll per saber hit that lands. */
+static float jkSaber_bonusAmputationChance = 0.0f;
+
+static int jkSaber_HandheldAmputationEnabled(void)
+{
+    const char *env;
+
+    if (openjkdf2_IsHandheld())
+        return 1;
+
+    env = getenv("OPENJKDF2_HANDHELD");
+    if (!env || !env[0] || env[0] == '0')
+        return 0;
+    if (!strcmp(env, "false") || !strcmp(env, "FALSE") || !strcmp(env, "off") || !strcmp(env, "OFF"))
+        return 0;
+    return 1;
+}
+
+static void jkSaber_LoadAmputationTuning(void)
+{
+    const char *boost_env = getenv("OPENJKDF2_AMPUTATION_BOOST");
+    const char *chance_env = getenv("OPENJKDF2_AMPUTATION_CHANCE");
+
+    if (boost_env && boost_env[0]) {
+        jkSaber_amputationRandExponent = (float)atof(boost_env);
+    } else if (jkSaber_HandheldAmputationEnabled()) {
+        jkSaber_amputationRandExponent = 1.35f;
+    } else {
+        jkSaber_amputationRandExponent = 1.0f;
+    }
+
+    if (chance_env && chance_env[0]) {
+        jkSaber_bonusAmputationChance = (float)atof(chance_env);
+    } else if (jkSaber_HandheldAmputationEnabled()) {
+        jkSaber_bonusAmputationChance = 0.10f;
+    } else {
+        jkSaber_bonusAmputationChance = 0.0f;
+    }
+
+    if (jkSaber_amputationRandExponent < 1.0f)
+        jkSaber_amputationRandExponent = 1.0f;
+    if (jkSaber_bonusAmputationChance < 0.0f)
+        jkSaber_bonusAmputationChance = 0.0f;
+}
+
+float jkSaber_GetAmputationRandExponent(void)
+{
+    return jkSaber_amputationRandExponent;
+}
+
+static void jkSaber_AmputateBodypart(sithThing *thing, int bodypart)
+{
+    sithAnimclass *animclass;
+    rdThing *rdthing;
+    int jointIdx;
+
+    if (!thing || bodypart < 0 || bodypart >= 0xA)
+        return;
+
+    animclass = thing->animclass;
+    rdthing = &thing->rdthing;
+    if (!animclass || !rdthing->amputatedJoints)
+        return;
+
+    jointIdx = animclass->bodypart_to_joint[bodypart];
+    if (jointIdx < 0 || !rdthing->model3 || jointIdx >= rdthing->model3->numHierarchyNodes)
+        return;
+    if (rdthing->amputatedJoints[jointIdx])
+        return;
+
+    rdthing->amputatedJoints[jointIdx] = 1;
+}
+
+static void jkSaber_TryBonusAmputation(sithThing *victim)
+{
+    int start;
+    int i;
+
+    if (jkSaber_bonusAmputationChance <= 0.0f || _frand() >= jkSaber_bonusAmputationChance)
+        return;
+    if (!victim || (victim->type != SITH_THING_ACTOR && victim->type != SITH_THING_PLAYER))
+        return;
+    if (!(victim->actorParams.typeflags & SITH_AF_BLEEDS))
+        return;
+
+    start = (int)(_frand() * 10.0);
+    for (i = 0; i < 10; i++) {
+        int bodypart = (start + i) % 10;
+
+        if (bodypart == JOINTTYPE_HEAD || bodypart == JOINTTYPE_NECK || bodypart == JOINTTYPE_TORSO)
+            continue;
+
+        if (victim->animclass->bodypart_to_joint[bodypart] < 0)
+            continue;
+
+        jkSaber_AmputateBodypart(victim, bodypart);
+        return;
+    }
+}
 
 void jkSaber_Startup()
 {
+    jkSaber_LoadAmputationTuning();
 }
 
 void jkSaber_Shutdown()
@@ -267,6 +375,7 @@ void  jkSaber_UpdateCollision2(sithThing *pPlayerThing,rdVector3 *pSaberPos,rdVe
                 jkSaber_SpawnSparks(playerInfo, &local_54, pSectorIter, SPARKTYPE_BLOOD);
 
                 sithThing_Damage(searchResult->receiver, pPlayerThing, pCollideInfo->damage, SITH_DAMAGE_SABER);
+                jkSaber_TryBonusAmputation(searchResult->receiver);
                 pCollideInfo->damagedThings[pCollideInfo->numDamagedThings++] = searchResult->receiver;
                 break;
             }
@@ -304,6 +413,7 @@ void  jkSaber_UpdateCollision2(sithThing *pPlayerThing,rdVector3 *pSaberPos,rdVe
             jkSaber_SpawnSparks(playerInfo, &local_54, pSectorIter, SPARKTYPE_BLOOD);
 
             sithThing_Damage(resultThing, pPlayerThing, pCollideInfo->damage, SITH_DAMAGE_SABER);
+            jkSaber_TryBonusAmputation(resultThing);
             pCollideInfo->damagedThings[pCollideInfo->numDamagedThings++] = searchResult->receiver;
             break;
         }
