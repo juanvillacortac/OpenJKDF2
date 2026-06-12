@@ -70,12 +70,20 @@ static int std3D_menuBufferDirty = 1;
 static void std3D_uploadBuffer(GLuint buf, GLenum target, size_t size, const void *data, size_t *cap)
 {
     glBindBuffer(target, buf);
-    if (size > *cap) {
-        glBufferData(target, size, data, GL_DYNAMIC_DRAW);
+#if defined(TARGET_LINUX_GLES)
+    /* Mali: glBufferSubData often stalls; orphan via glBufferData is smoother. */
+    glBufferData(target, size, data, GL_DYNAMIC_DRAW);
+    if (size > *cap)
         *cap = size;
+#else
+    if (!data || size > *cap) {
+        glBufferData(target, size, data, GL_DYNAMIC_DRAW);
+        if (size > *cap)
+            *cap = size;
     } else {
         glBufferSubData(target, 0, size, data);
     }
+#endif
 }
 
 void std3D_MarkMenuBufferDirty(void)
@@ -168,6 +176,24 @@ GLint uniform_light_mult, uniform_displacement_factor, uniform_iResolution;
 
 GLint programMenu_attribute_coord3d, programMenu_attribute_v_color, programMenu_attribute_v_uv, programMenu_attribute_v_norm;
 GLint programMenu_uniform_mvp, programMenu_uniform_tex, programMenu_uniform_displayPalette;
+
+static GLint programDefault_cached_attribute_coord3d, programDefault_cached_attribute_v_color;
+static GLint programDefault_cached_attribute_v_light, programDefault_cached_attribute_v_uv;
+static GLint programDefault_cached_uniform_mvp, programDefault_cached_uniform_tex, programDefault_cached_uniform_texEmiss;
+static GLint programDefault_cached_uniform_worldPalette, programDefault_cached_uniform_worldPaletteLights;
+static GLint programDefault_cached_uniform_displacement_map, programDefault_cached_uniform_tex_mode, programDefault_cached_uniform_blend_mode;
+static GLint programDefault_cached_uniform_tint, programDefault_cached_uniform_filter, programDefault_cached_uniform_fade, programDefault_cached_uniform_add;
+static GLint programDefault_cached_uniform_emissiveFactor, programDefault_cached_uniform_albedoFactor;
+static GLint programDefault_cached_uniform_light_mult, programDefault_cached_uniform_displacement_factor, programDefault_cached_uniform_iResolution;
+
+static GLint programDefaultLite_attribute_coord3d, programDefaultLite_attribute_v_color;
+static GLint programDefaultLite_attribute_v_light, programDefaultLite_attribute_v_uv;
+static GLint programDefaultLite_uniform_mvp, programDefaultLite_uniform_tex, programDefaultLite_uniform_texEmiss;
+static GLint programDefaultLite_uniform_worldPalette, programDefaultLite_uniform_worldPaletteLights;
+static GLint programDefaultLite_uniform_displacement_map, programDefaultLite_uniform_tex_mode, programDefaultLite_uniform_blend_mode;
+static GLint programDefaultLite_uniform_tint, programDefaultLite_uniform_filter, programDefaultLite_uniform_fade, programDefaultLite_uniform_add;
+static GLint programDefaultLite_uniform_emissiveFactor, programDefaultLite_uniform_albedoFactor;
+static GLint programDefaultLite_uniform_light_mult, programDefaultLite_uniform_displacement_factor, programDefaultLite_uniform_iResolution;
 
 std3DSimpleTexStage std3D_uiProgram;
 std3DSimpleTexStage std3D_texFboStage;
@@ -513,30 +539,54 @@ GLint std3D_tryFindUniform(GLuint program, const char* uniform_name)
 
 static void std3D_bindDefaultProgram(int use_full_mrt)
 {
-    GLuint prog = use_full_mrt ? programDefault : programDefaultLite;
+    if (use_full_mrt) {
+        glUseProgram(programDefault);
+        attribute_coord3d = programDefault_cached_attribute_coord3d;
+        attribute_v_color = programDefault_cached_attribute_v_color;
+        attribute_v_light = programDefault_cached_attribute_v_light;
+        attribute_v_uv = programDefault_cached_attribute_v_uv;
+        uniform_mvp = programDefault_cached_uniform_mvp;
+        uniform_tex = programDefault_cached_uniform_tex;
+        uniform_texEmiss = programDefault_cached_uniform_texEmiss;
+        uniform_worldPalette = programDefault_cached_uniform_worldPalette;
+        uniform_worldPaletteLights = programDefault_cached_uniform_worldPaletteLights;
+        uniform_displacement_map = programDefault_cached_uniform_displacement_map;
+        uniform_tex_mode = programDefault_cached_uniform_tex_mode;
+        uniform_blend_mode = programDefault_cached_uniform_blend_mode;
+        uniform_tint = programDefault_cached_uniform_tint;
+        uniform_filter = programDefault_cached_uniform_filter;
+        uniform_fade = programDefault_cached_uniform_fade;
+        uniform_add = programDefault_cached_uniform_add;
+        uniform_emissiveFactor = programDefault_cached_uniform_emissiveFactor;
+        uniform_albedoFactor = programDefault_cached_uniform_albedoFactor;
+        uniform_light_mult = programDefault_cached_uniform_light_mult;
+        uniform_displacement_factor = programDefault_cached_uniform_displacement_factor;
+        uniform_iResolution = programDefault_cached_uniform_iResolution;
+        return;
+    }
 
-    glUseProgram(prog);
-    attribute_coord3d = std3D_tryFindAttribute(prog, "coord3d");
-    attribute_v_color = std3D_tryFindAttribute(prog, "v_color");
-    attribute_v_light = std3D_tryFindAttribute(prog, "v_light");
-    attribute_v_uv = std3D_tryFindAttribute(prog, "v_uv");
-    uniform_mvp = std3D_tryFindUniform(prog, "mvp");
-    uniform_tex = std3D_tryFindUniform(prog, "tex");
-    uniform_texEmiss = std3D_tryFindUniform(prog, "texEmiss");
-    uniform_worldPalette = std3D_tryFindUniform(prog, "worldPalette");
-    uniform_worldPaletteLights = std3D_tryFindUniform(prog, "worldPaletteLights");
-    uniform_displacement_map = std3D_tryFindUniform(prog, "displacement_map");
-    uniform_tex_mode = std3D_tryFindUniform(prog, "tex_mode");
-    uniform_blend_mode = std3D_tryFindUniform(prog, "blend_mode");
-    uniform_tint = std3D_tryFindUniform(prog, "colorEffects_tint");
-    uniform_filter = std3D_tryFindUniform(prog, "colorEffects_filter");
-    uniform_fade = std3D_tryFindUniform(prog, "colorEffects_fade");
-    uniform_add = std3D_tryFindUniform(prog, "colorEffects_add");
-    uniform_emissiveFactor = std3D_tryFindUniform(prog, "emissiveFactor");
-    uniform_albedoFactor = std3D_tryFindUniform(prog, "albedoFactor");
-    uniform_light_mult = std3D_tryFindUniform(prog, "light_mult");
-    uniform_displacement_factor = std3D_tryFindUniform(prog, "displacement_factor");
-    uniform_iResolution = std3D_tryFindUniform(prog, "iResolution");
+    glUseProgram(programDefaultLite);
+    attribute_coord3d = programDefaultLite_attribute_coord3d;
+    attribute_v_color = programDefaultLite_attribute_v_color;
+    attribute_v_light = programDefaultLite_attribute_v_light;
+    attribute_v_uv = programDefaultLite_attribute_v_uv;
+    uniform_mvp = programDefaultLite_uniform_mvp;
+    uniform_tex = programDefaultLite_uniform_tex;
+    uniform_texEmiss = programDefaultLite_uniform_texEmiss;
+    uniform_worldPalette = programDefaultLite_uniform_worldPalette;
+    uniform_worldPaletteLights = programDefaultLite_uniform_worldPaletteLights;
+    uniform_displacement_map = programDefaultLite_uniform_displacement_map;
+    uniform_tex_mode = programDefaultLite_uniform_tex_mode;
+    uniform_blend_mode = programDefaultLite_uniform_blend_mode;
+    uniform_tint = programDefaultLite_uniform_tint;
+    uniform_filter = programDefaultLite_uniform_filter;
+    uniform_fade = programDefaultLite_uniform_fade;
+    uniform_add = programDefaultLite_uniform_add;
+    uniform_emissiveFactor = programDefaultLite_uniform_emissiveFactor;
+    uniform_albedoFactor = programDefaultLite_uniform_albedoFactor;
+    uniform_light_mult = programDefaultLite_uniform_light_mult;
+    uniform_displacement_factor = programDefaultLite_uniform_displacement_factor;
+    uniform_iResolution = programDefaultLite_uniform_iResolution;
 }
 
 bool std3D_loadSimpleTexProgram(const char* fpath_base, std3DSimpleTexStage* pOut)
@@ -639,6 +689,50 @@ int init_resources()
     uniform_light_mult = std3D_tryFindUniform(programDefault, "light_mult");
     uniform_displacement_factor = std3D_tryFindUniform(programDefault, "displacement_factor");
     uniform_iResolution = std3D_tryFindUniform(programDefault, "iResolution");
+
+    programDefault_cached_attribute_coord3d = attribute_coord3d;
+    programDefault_cached_attribute_v_color = attribute_v_color;
+    programDefault_cached_attribute_v_light = attribute_v_light;
+    programDefault_cached_attribute_v_uv = attribute_v_uv;
+    programDefault_cached_uniform_mvp = uniform_mvp;
+    programDefault_cached_uniform_tex = uniform_tex;
+    programDefault_cached_uniform_texEmiss = uniform_texEmiss;
+    programDefault_cached_uniform_worldPalette = uniform_worldPalette;
+    programDefault_cached_uniform_worldPaletteLights = uniform_worldPaletteLights;
+    programDefault_cached_uniform_displacement_map = uniform_displacement_map;
+    programDefault_cached_uniform_tex_mode = uniform_tex_mode;
+    programDefault_cached_uniform_blend_mode = uniform_blend_mode;
+    programDefault_cached_uniform_tint = uniform_tint;
+    programDefault_cached_uniform_filter = uniform_filter;
+    programDefault_cached_uniform_fade = uniform_fade;
+    programDefault_cached_uniform_add = uniform_add;
+    programDefault_cached_uniform_emissiveFactor = uniform_emissiveFactor;
+    programDefault_cached_uniform_albedoFactor = uniform_albedoFactor;
+    programDefault_cached_uniform_light_mult = uniform_light_mult;
+    programDefault_cached_uniform_displacement_factor = uniform_displacement_factor;
+    programDefault_cached_uniform_iResolution = uniform_iResolution;
+
+    programDefaultLite_attribute_coord3d = std3D_tryFindAttribute(programDefaultLite, "coord3d");
+    programDefaultLite_attribute_v_color = std3D_tryFindAttribute(programDefaultLite, "v_color");
+    programDefaultLite_attribute_v_light = std3D_tryFindAttribute(programDefaultLite, "v_light");
+    programDefaultLite_attribute_v_uv = std3D_tryFindAttribute(programDefaultLite, "v_uv");
+    programDefaultLite_uniform_mvp = std3D_tryFindUniform(programDefaultLite, "mvp");
+    programDefaultLite_uniform_tex = std3D_tryFindUniform(programDefaultLite, "tex");
+    programDefaultLite_uniform_texEmiss = std3D_tryFindUniform(programDefaultLite, "texEmiss");
+    programDefaultLite_uniform_worldPalette = std3D_tryFindUniform(programDefaultLite, "worldPalette");
+    programDefaultLite_uniform_worldPaletteLights = std3D_tryFindUniform(programDefaultLite, "worldPaletteLights");
+    programDefaultLite_uniform_displacement_map = std3D_tryFindUniform(programDefaultLite, "displacement_map");
+    programDefaultLite_uniform_tex_mode = std3D_tryFindUniform(programDefaultLite, "tex_mode");
+    programDefaultLite_uniform_blend_mode = std3D_tryFindUniform(programDefaultLite, "blend_mode");
+    programDefaultLite_uniform_tint = std3D_tryFindUniform(programDefaultLite, "colorEffects_tint");
+    programDefaultLite_uniform_filter = std3D_tryFindUniform(programDefaultLite, "colorEffects_filter");
+    programDefaultLite_uniform_fade = std3D_tryFindUniform(programDefaultLite, "colorEffects_fade");
+    programDefaultLite_uniform_add = std3D_tryFindUniform(programDefaultLite, "colorEffects_add");
+    programDefaultLite_uniform_emissiveFactor = std3D_tryFindUniform(programDefaultLite, "emissiveFactor");
+    programDefaultLite_uniform_albedoFactor = std3D_tryFindUniform(programDefaultLite, "albedoFactor");
+    programDefaultLite_uniform_light_mult = std3D_tryFindUniform(programDefaultLite, "light_mult");
+    programDefaultLite_uniform_displacement_factor = std3D_tryFindUniform(programDefaultLite, "displacement_factor");
+    programDefaultLite_uniform_iResolution = std3D_tryFindUniform(programDefaultLite, "iResolution");
     
     programMenu_attribute_coord3d = std3D_tryFindAttribute(programMenu, "coord3d");
     programMenu_attribute_v_color = std3D_tryFindAttribute(programMenu, "v_color");
@@ -1496,7 +1590,10 @@ void std3D_DrawMenu()
     
     glActiveTexture(GL_TEXTURE0 + 0);
     glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
-    if (std3D_menuBufferDirty) {
+#if !defined(TARGET_LINUX_GLES)
+    if (std3D_menuBufferDirty)
+#endif
+    {
         uint8_t *menuPixels = stdDisplay_VBufferPixels(&Video_menuBuffer);
         if (menuPixels) {
             glPixelStorei(GL_UNPACK_ROW_LENGTH, Video_menuBuffer.format.width);
@@ -1577,7 +1674,11 @@ void std3D_DrawMenu()
     };
     
     glUniformMatrix4fv(programMenu_uniform_mvp, 1, GL_FALSE, d3dmat);
+#if defined(TARGET_LINUX_GLES)
+    Window_SetPresentViewport();
+#else
     glViewport(0, 0, width, height);
+#endif
 
     }
     
@@ -1716,7 +1817,11 @@ void std3D_DrawMapOverlay()
     };
     
     glUniformMatrix4fv(programMenu_uniform_mvp, 1, GL_FALSE, d3dmat);
+#if defined(TARGET_LINUX_GLES)
+    Window_SetPresentViewport();
+#else
     glViewport(0, 0, width, height);
+#endif
 
     }
     
@@ -2077,7 +2182,11 @@ void std3D_DrawUIRenderList()
     };
     
     glUniformMatrix4fv(std3D_uiProgram.uniform_mvp, 1, GL_FALSE, d3dmat);
+#if defined(TARGET_LINUX_GLES)
+    Window_SetPresentViewport();
+#else
     glViewport(0, 0, width, height);
+#endif
     glUniform2f(std3D_uiProgram.uniform_iResolution, internalWidth, internalHeight);
 
     float param1 = 1.0;
@@ -2336,7 +2445,15 @@ void std3D_DrawSimpleTex(std3DSimpleTexStage* pStage, std3DIntermediateFbo* pFbo
     };
     
     glUniformMatrix4fv(pStage->uniform_mvp, 1, GL_FALSE, d3dmat);
-    glViewport(0, 0, width, height);
+    if (pFbo->fbo == std3D_windowFbo) {
+#if defined(TARGET_LINUX_GLES)
+        Window_SetPresentViewport();
+#else
+        glViewport(0, 0, width, height);
+#endif
+    } else {
+        glViewport(0, 0, width, height);
+    }
     glUniform2f(pStage->uniform_iResolution, pFbo->iw, pFbo->ih);
 
     glUniform1f(pStage->uniform_param1, param1);
@@ -2353,35 +2470,14 @@ void std3D_DrawSimpleTex(std3DSimpleTexStage* pStage, std3DIntermediateFbo* pFbo
     glBindBuffer(GL_ARRAY_BUFFER, menu_vbo_all);
     std3D_uploadBuffer(menu_vbo_all, GL_ARRAY_BUFFER, GL_tmpVerticesAmt * sizeof(D3DVERTEX), GL_tmpVertices, &std3D_menuVboCap);
     glVertexAttribPointer(
-        programMenu_attribute_coord3d, // attribute
-        3,                 // number of elements per vertex, here (x,y,z)
-        GL_FLOAT,          // the type of each element
-        GL_FALSE,          // normalize fixed-point data?
-        sizeof(D3DVERTEX),                 // data stride
-        (GLvoid*)offsetof(D3DVERTEX, x)                  // offset of first element
-    );
-    
+        pStage->attribute_coord3d,
+        3, GL_FLOAT, GL_FALSE, sizeof(D3DVERTEX), (GLvoid*)offsetof(D3DVERTEX, x));
     glVertexAttribPointer(
-        programMenu_attribute_v_color, // attribute
-        4,                 // number of elements per vertex, here (R,G,B,A)
-        GL_UNSIGNED_BYTE,  // the type of each element
-        GL_TRUE,          // normalize fixed-point data?
-        sizeof(D3DVERTEX),                 // no extra data between each position
-        (GLvoid*)offsetof(D3DVERTEX, color) // offset of first element
-    );
-
+        pStage->attribute_v_color,
+        4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(D3DVERTEX), (GLvoid*)offsetof(D3DVERTEX, color));
     glVertexAttribPointer(
-        programMenu_attribute_v_uv,    // attribute
-        2,                 // number of elements per vertex, here (U,V)
-        GL_FLOAT,          // the type of each element
-        GL_FALSE,          // take our values as-is
-        sizeof(D3DVERTEX),                 // no extra data between each position
-        (GLvoid*)offsetof(D3DVERTEX, tu)                  // offset of first element
-    );
-
-    glEnableVertexAttribArray(pStage->attribute_coord3d);
-    glEnableVertexAttribArray(pStage->attribute_v_color);
-    glEnableVertexAttribArray(pStage->attribute_v_uv);
+        pStage->attribute_v_uv,
+        2, GL_FLOAT, GL_FALSE, sizeof(D3DVERTEX), (GLvoid*)offsetof(D3DVERTEX, tu));
     
     rdDDrawSurface* last_tex = (rdDDrawSurface*)(intptr_t)-1;
     int last_tex_idx = 0;
@@ -2466,7 +2562,11 @@ static void std3D_DrawSceneComposite(std3DIntermediateFbo *pFbo, GLuint albedoTe
             -((float)pFbo->w / 2.0f) * scaleX, ((float)pFbo->h / 2.0f) * scaleY, -1, 1
         };
         glUniformMatrix4fv(pStage->uniform_mvp, 1, GL_FALSE, d3dmat);
+#if defined(TARGET_LINUX_GLES)
+        Window_SetPresentViewport();
+#else
         glViewport(0, 0, pFbo->w, pFbo->h);
+#endif
         glUniform2f(pStage->uniform_iResolution, (float)pFbo->iw, (float)pFbo->ih);
         glUniform1i(pStage->uniform_tex, 0);
         glUniform1i(pStage->uniform_tex2, 1);
@@ -3146,6 +3246,121 @@ int std3D_ClearZBuffer()
     return 1;
 }
 
+#if defined(TARGET_LINUX_GLES)
+static int std3D_glesIsRgb565(stdVBuffer *vbuf)
+{
+    return vbuf->format.format.r_bits == 5
+        && vbuf->format.format.g_bits == 6
+        && vbuf->format.format.b_bits == 5;
+}
+
+static int std3D_glesIsRgb1555(stdVBuffer *vbuf)
+{
+    return vbuf->format.format.r_bits == 5
+        && vbuf->format.format.g_bits == 5
+        && vbuf->format.format.b_bits == 5;
+}
+
+static int std3D_glesTryUpload16bppNative(stdVBuffer *vbuf, uint32_t width, uint32_t height, void *pixels, int is_alpha_tex)
+{
+    uint32_t row_stride_pixels = vbuf->format.width_in_bytes / 2;
+
+    if (!pixels || !width || !height || row_stride_pixels < width) {
+        return 0;
+    }
+
+    while (glGetError() != GL_NO_ERROR) {}
+
+    if (row_stride_pixels != width) {
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, row_stride_pixels);
+    }
+
+    if (!is_alpha_tex && std3D_glesIsRgb565(vbuf)) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5_REV, pixels);
+    } else if (is_alpha_tex || std3D_glesIsRgb1555(vbuf)) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, pixels);
+    } else {
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        return 0;
+    }
+
+    if (glGetError() == GL_NO_ERROR) {
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        return 1;
+    }
+
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    return 0;
+}
+
+static void* std3D_glesConvert16bppToRgba8(stdVBuffer *vbuf, uint32_t width, uint32_t height, uint16_t *image_16bpp)
+{
+    uint32_t row_stride = vbuf->format.width_in_bytes / 2;
+    uint32_t tex_row_stride = width;
+    void* image_data = malloc(width * height * 4);
+    if (!image_data) {
+        return NULL;
+    }
+    memset(image_data, 0, width * height * 4);
+
+    for (uint32_t j = 0; j < height; j++)
+    {
+        for (uint32_t i = 0; i < width; i++)
+        {
+            uint32_t src_index = (j * row_stride) + i;
+            uint32_t tex_index = (j * tex_row_stride) + i;
+            uint32_t val_rgba = 0x00000000;
+            uint16_t val = image_16bpp[src_index];
+
+            if (std3D_glesIsRgb565(vbuf))
+            {
+                uint8_t val_a8 = 0xFF;
+                uint8_t val_r5 = (val >> 11) & 0x1F;
+                uint8_t val_g6 = (val >> 5) & 0x3F;
+                uint8_t val_b5 = (val >> 0) & 0x1F;
+                uint8_t val_r8 = (val_r5 * 527 + 23) >> 6;
+                uint8_t val_g8 = (val_g6 * 259 + 33) >> 6;
+                uint8_t val_b8 = (val_b5 * 527 + 23) >> 6;
+
+                if (vbuf->transparent_color) {
+                    uint8_t transparent_r5 = (vbuf->transparent_color >> 11) & 0x1F;
+                    uint8_t transparent_g6 = (vbuf->transparent_color >> 5) & 0x3F;
+                    uint8_t transparent_b5 = (vbuf->transparent_color >> 0) & 0x1F;
+                    if (val_r5 == transparent_r5 && val_g6 == transparent_g6 && val_b5 == transparent_b5) {
+                        val_a8 = 0;
+                    }
+                }
+
+                val_rgba |= (val_a8 << 24);
+                val_rgba |= (val_b8 << 16);
+                val_rgba |= (val_g8 << 8);
+                val_rgba |= (val_r8 << 0);
+            }
+            else if (std3D_glesIsRgb1555(vbuf))
+            {
+                uint8_t val_a1 = (val >> 15);
+                uint8_t val_r5 = (val >> 10) & 0x1F;
+                uint8_t val_g5 = (val >> 5) & 0x1F;
+                uint8_t val_b5 = (val >> 0) & 0x1F;
+                uint8_t val_a8 = val_a1 ? 0xFF : 0x0;
+                uint8_t val_r8 = (val_r5 * 527 + 23) >> 6;
+                uint8_t val_g8 = (val_g5 * 527 + 23) >> 6;
+                uint8_t val_b8 = (val_b5 * 527 + 23) >> 6;
+
+                val_rgba |= (val_a8 << 24);
+                val_rgba |= (val_b8 << 16);
+                val_rgba |= (val_g8 << 8);
+                val_rgba |= (val_r8 << 0);
+            }
+
+            ((uint32_t*)image_data)[tex_index] = val_rgba;
+        }
+    }
+
+    return image_data;
+}
+#endif
+
 int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_alpha_tex, int no_alpha)
 {
     if (Main_bHeadless) return 1;
@@ -3211,71 +3426,23 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
         texture->is_16bit = 1;
 #if defined(TARGET_LINUX_GLES)
         {
-            uint32_t row_stride = vbuf->format.width_in_bytes / 2;
-            uint32_t tex_width = width;
-            uint32_t tex_height = height;
-            uint32_t tex_row_stride = width;
-            void* image_data = malloc(tex_width * tex_height * 4);
-            if (!image_data) {
-                return 0;
+            void* image_data = NULL;
+            int use_native = 0;
+
+            if (std3D_glesIsRgb565(vbuf) && !vbuf->transparent_color) {
+                use_native = std3D_glesTryUpload16bppNative(vbuf, width, height, image_8bpp, 0);
+            } else if (is_alpha_tex || std3D_glesIsRgb1555(vbuf)) {
+                use_native = std3D_glesTryUpload16bppNative(vbuf, width, height, image_8bpp, 1);
             }
-            memset(image_data, 0, tex_width * tex_height * 4);
 
-            for (uint32_t j = 0; j < height; j++)
-            {
-                for (uint32_t i = 0; i < width; i++)
-                {
-                    uint32_t src_index = (j * row_stride) + i;
-                    uint32_t tex_index = (j * tex_row_stride) + i;
-                    uint32_t val_rgba = 0x00000000;
-                    uint16_t val = image_16bpp[src_index];
-
-                    if (vbuf->format.format.r_bits == 5 && vbuf->format.format.g_bits == 6 && vbuf->format.format.b_bits == 5)
-                    {
-                        uint8_t val_a8 = 0xFF;
-                        uint8_t val_r5 = (val >> 11) & 0x1F;
-                        uint8_t val_g6 = (val >> 5) & 0x3F;
-                        uint8_t val_b5 = (val >> 0) & 0x1F;
-                        uint8_t val_r8 = (val_r5 * 527 + 23) >> 6;
-                        uint8_t val_g8 = (val_g6 * 259 + 33) >> 6;
-                        uint8_t val_b8 = (val_b5 * 527 + 23) >> 6;
-
-                        if (vbuf->transparent_color) {
-                            uint8_t transparent_r5 = (vbuf->transparent_color >> 11) & 0x1F;
-                            uint8_t transparent_g6 = (vbuf->transparent_color >> 5) & 0x3F;
-                            uint8_t transparent_b5 = (vbuf->transparent_color >> 0) & 0x1F;
-                            if (val_r5 == transparent_r5 && val_g6 == transparent_g6 && val_b5 == transparent_b5) {
-                                val_a8 = 0;
-                            }
-                        }
-
-                        val_rgba |= (val_a8 << 24);
-                        val_rgba |= (val_b8 << 16);
-                        val_rgba |= (val_g8 << 8);
-                        val_rgba |= (val_r8 << 0);
-                    }
-                    else if (vbuf->format.format.r_bits == 5 && vbuf->format.format.g_bits == 5 && vbuf->format.format.b_bits == 5)
-                    {
-                        uint8_t val_a1 = (val >> 15);
-                        uint8_t val_r5 = (val >> 10) & 0x1F;
-                        uint8_t val_g5 = (val >> 5) & 0x1F;
-                        uint8_t val_b5 = (val >> 0) & 0x1F;
-                        uint8_t val_a8 = val_a1 ? 0xFF : 0x0;
-                        uint8_t val_r8 = (val_r5 * 527 + 23) >> 6;
-                        uint8_t val_g8 = (val_g5 * 527 + 23) >> 6;
-                        uint8_t val_b8 = (val_b5 * 527 + 23) >> 6;
-
-                        val_rgba |= (val_a8 << 24);
-                        val_rgba |= (val_b8 << 16);
-                        val_rgba |= (val_g8 << 8);
-                        val_rgba |= (val_r8 << 0);
-                    }
-
-                    ((uint32_t*)image_data)[tex_index] = val_rgba;
+            if (!use_native) {
+                image_data = std3D_glesConvert16bppToRgba8(vbuf, width, height, image_16bpp);
+                if (!image_data) {
+                    return 0;
                 }
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
             }
 
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
             texture->pDataDepthConverted = image_data;
         }
 #else
@@ -3502,22 +3669,25 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
     {
         texture->is_16bit = 1;
 
-#if 0
-        if (!is_alpha_tex)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0,  GL_RGB, GL_UNSIGNED_SHORT_5_6_5, image_8bpp);
-        else
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0,  GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, image_8bpp);
-#endif
+#if defined(TARGET_LINUX_GLES)
+        {
+            void* image_data = std3D_glesConvert16bppToRgba8(vbuf, width, height, image_16bpp);
+            if (!image_data) {
+                return 0;
+            }
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+            texture->paDataDepthConverted[mipIdx] = image_data;
+        }
+#else
         uint32_t tex_width, tex_height, tex_row_stride;
         uint32_t row_stride = vbuf->format.width_in_bytes / 2;
-        tex_width = width;//vbuf->format.width_in_bytes / 2;
+        tex_width = width;
         tex_height = height;
         tex_row_stride = width;
 
         void* image_data = malloc(tex_width*tex_height*4);
         memset(image_data, 0, tex_width*tex_height*4);
-    
-        //uint32_t index = 0;
+
         for (int j = 0; j < height; j++)
         {
             for (int i = 0; i < width; i++)
@@ -3525,105 +3695,56 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
                 uint32_t index = (j*row_stride) + i;
                 uint32_t tex_index = (j*tex_row_stride) + i;
                 uint32_t val_rgba = 0x00000000;
-                
+
                 uint16_t val = image_16bpp[index];
-                if (vbuf->format.format.r_bits == 5 && vbuf->format.format.g_bits == 6 && vbuf->format.format.b_bits == 5) // RGB565
+                if (vbuf->format.format.r_bits == 5 && vbuf->format.format.g_bits == 6 && vbuf->format.format.b_bits == 5)
                 {
-                    uint8_t val_a1 = 1;
+                    uint8_t val_a8 = 0xFF;
                     uint8_t val_r5 = (val >> 11) & 0x1F;
                     uint8_t val_g6 = (val >> 5) & 0x3F;
                     uint8_t val_b5 = (val >> 0) & 0x1F;
-
-                    uint8_t val_a8 = val_a1 ? 0xFF : 0x0;
                     uint8_t val_r8 = ( val_r5 * 527 + 23 ) >> 6;
                     uint8_t val_g8 = ( val_g6 * 259 + 33 ) >> 6;
                     uint8_t val_b8 = ( val_b5 * 527 + 23 ) >> 6;
 
-                    //uint8_t transparent_r8 = (vbuf->transparent_color >> 16) & 0xFF;
-                    //uint8_t transparent_g8 = (vbuf->transparent_color >> 8) & 0xFF;
-                    //uint8_t transparent_b8 = (vbuf->transparent_color >> 0) & 0xFF;
-
-                    uint8_t transparent_r5 = (vbuf->transparent_color >> 11) & 0x1F;
-                    uint8_t transparent_g6 = (vbuf->transparent_color >> 5) & 0x3F;
-                    uint8_t transparent_b5 = (vbuf->transparent_color >> 0) & 0x1F;
-
-                    uint8_t transparent_r8 = ( transparent_r5 * 527 + 23 ) >> 6;
-                    uint8_t transparent_g8 = ( transparent_g6 * 259 + 33 ) >> 6;
-                    uint8_t transparent_b8 = ( transparent_b5 * 527 + 23 ) >> 6;
-
-                    //
-                    if (vbuf->transparent_color && val_r5 == transparent_r5 && val_g6 == transparent_g6 && val_b5 == transparent_b5) {
-                        val_a8 = 0;
-                        //val_r8 = 0;
-                        //val_g8 = 0;
-                        //val_b8 = 0;
+                    if (vbuf->transparent_color) {
+                        uint8_t transparent_r5 = (vbuf->transparent_color >> 11) & 0x1F;
+                        uint8_t transparent_g6 = (vbuf->transparent_color >> 5) & 0x3F;
+                        uint8_t transparent_b5 = (vbuf->transparent_color >> 0) & 0x1F;
+                        if (val_r5 == transparent_r5 && val_g6 == transparent_g6 && val_b5 == transparent_b5) {
+                            val_a8 = 0;
+                        }
                     }
 
                     val_rgba |= (val_a8 << 24);
                     val_rgba |= (val_b8 << 16);
                     val_rgba |= (val_g8 << 8);
                     val_rgba |= (val_r8 << 0);
-
-#if 0
-                    val_rgba = 0xFF000000;
-                    val_rgba |= (transparent_b8 << 16);
-                    val_rgba |= (transparent_g8 << 8);
-                    val_rgba |= (transparent_r8 << 0);
-#endif
                 }
-                else if (vbuf->format.format.r_bits == 5 && vbuf->format.format.g_bits == 5 && vbuf->format.format.b_bits == 5) // RGB1555
+                else if (vbuf->format.format.r_bits == 5 && vbuf->format.format.g_bits == 5 && vbuf->format.format.b_bits == 5)
                 {
                     uint8_t val_a1 = (val >> 15);
                     uint8_t val_r5 = (val >> 10) & 0x1F;
                     uint8_t val_g5 = (val >> 5) & 0x1F;
                     uint8_t val_b5 = (val >> 0) & 0x1F;
-
                     uint8_t val_a8 = val_a1 ? 0xFF : 0x0;
                     uint8_t val_r8 = ( val_r5 * 527 + 23 ) >> 6;
                     uint8_t val_g8 = ( val_g5 * 527 + 23 ) >> 6;
                     uint8_t val_b8 = ( val_b5 * 527 + 23 ) >> 6;
 
-                    uint8_t transparent_a1 = (vbuf->transparent_color >> 15) & 0x1;
-                    uint8_t transparent_r5 = (vbuf->transparent_color >> 10) & 0x1F;
-                    uint8_t transparent_g5 = (vbuf->transparent_color >> 5) & 0x1F;
-                    uint8_t transparent_b5 = (vbuf->transparent_color >> 0) & 0x1F;
-
-                    uint8_t transparent_r8 = ( transparent_r5 * 527 + 23 ) >> 6;
-                    uint8_t transparent_g8 = ( transparent_g5 * 527 + 23 ) >> 6;
-                    uint8_t transparent_b8 = ( transparent_b5 * 527 + 23 ) >> 6;
-
-#if 0
-                    //vbuf->transparent_color && 
-                    if (val_a1 == transparent_a1 && val_r5 == transparent_r5 && val_g5 == transparent_g5 && val_b5 == transparent_b5) {
-                        val_a8 = 0;
-                        //val_r8 = 0;
-                        //val_g8 = 0;
-                        //val_b8 = 0;
-                    }
-#endif
-
                     val_rgba |= (val_a8 << 24);
                     val_rgba |= (val_b8 << 16);
                     val_rgba |= (val_g8 << 8);
                     val_rgba |= (val_r8 << 0);
-#if 0
-                    val_rgba = 0xFF000000;
-                    val_rgba |= (transparent_b8 << 16);
-                    val_rgba |= (transparent_g8 << 8);
-                    val_rgba |= (transparent_r8 << 0);
-#endif
                 }
-                else {
-                    stdPlatform_Printf("wtf is this %u %u %u %u\n", vbuf->format.format.unk_40, vbuf->format.format.r_bits, vbuf->format.format.g_bits, vbuf->format.format.b_bits);
-                }
-                    
+
                 ((uint32_t*)image_data)[tex_index] = val_rgba;
             }
         }
-        
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
 
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
         texture->paDataDepthConverted[mipIdx] = image_data;
+#endif
     }
     else {
         texture->is_16bit = 0;

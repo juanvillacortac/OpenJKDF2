@@ -28,6 +28,8 @@ extern PFNGLBLENDFUNCPROC gles_glBlendFunc;
 #define glBlendFunc gles_glBlendFunc
 extern PFNGLBUFFERDATAPROC gles_glBufferData;
 #define glBufferData gles_glBufferData
+extern PFNGLBUFFERSUBDATAPROC gles_glBufferSubData;
+#define glBufferSubData gles_glBufferSubData
 extern PFNGLCHECKFRAMEBUFFERSTATUSPROC gles_glCheckFramebufferStatus;
 #define glCheckFramebufferStatus gles_glCheckFramebufferStatus
 extern PFNGLCLEARPROC gles_glClear;
@@ -90,6 +92,8 @@ extern PFNGLGETATTRIBLOCATIONPROC gles_glGetAttribLocation;
 #define glGetAttribLocation gles_glGetAttribLocation
 extern PFNGLGETBUFFERPARAMETERIVPROC gles_glGetBufferParameteriv;
 #define glGetBufferParameteriv gles_glGetBufferParameteriv
+extern PFNGLGETERRORPROC gles_glGetError;
+#define glGetError gles_glGetError
 extern PFNGLGETINTEGERVPROC gles_glGetIntegerv;
 #define glGetIntegerv gles_glGetIntegerv
 extern PFNGLGETPROGRAMINFOLOGPROC gles_glGetProgramInfoLog;

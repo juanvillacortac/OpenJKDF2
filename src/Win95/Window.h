@@ -70,6 +70,7 @@ void Window_SdlUpdate();
 void Window_SdlVblank();
 void Window_RecreateSDL2Window();
 void Window_BeginScreenDraw(void);
+void Window_SetPresentViewport(void);
 #endif
 
 #endif // _WINDOW_H

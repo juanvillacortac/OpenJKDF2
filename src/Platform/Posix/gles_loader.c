@@ -15,6 +15,7 @@ PFNGLBINDVERTEXARRAYPROC gles_glBindVertexArray;
 PFNGLBLENDEQUATIONPROC gles_glBlendEquation;
 PFNGLBLENDFUNCPROC gles_glBlendFunc;
 PFNGLBUFFERDATAPROC gles_glBufferData;
+PFNGLBUFFERSUBDATAPROC gles_glBufferSubData;
 PFNGLCHECKFRAMEBUFFERSTATUSPROC gles_glCheckFramebufferStatus;
 PFNGLCLEARPROC gles_glClear;
 PFNGLCLEARCOLORPROC gles_glClearColor;
@@ -46,6 +47,7 @@ PFNGLGENTEXTURESPROC gles_glGenTextures;
 PFNGLGENVERTEXARRAYSPROC gles_glGenVertexArrays;
 PFNGLGETATTRIBLOCATIONPROC gles_glGetAttribLocation;
 PFNGLGETBUFFERPARAMETERIVPROC gles_glGetBufferParameteriv;
+PFNGLGETERRORPROC gles_glGetError;
 PFNGLGETINTEGERVPROC gles_glGetIntegerv;
 PFNGLGETPROGRAMINFOLOGPROC gles_glGetProgramInfoLog;
 PFNGLGETPROGRAMIVPROC gles_glGetProgramiv;
@@ -97,6 +99,7 @@ bool gles_loader_init(void)
     gles_load_one((void **)&gles_glBlendEquation, "glBlendEquation", &missing);
     gles_load_one((void **)&gles_glBlendFunc, "glBlendFunc", &missing);
     gles_load_one((void **)&gles_glBufferData, "glBufferData", &missing);
+    gles_load_one((void **)&gles_glBufferSubData, "glBufferSubData", &missing);
     gles_load_one((void **)&gles_glCheckFramebufferStatus, "glCheckFramebufferStatus", &missing);
     gles_load_one((void **)&gles_glClear, "glClear", &missing);
     gles_load_one((void **)&gles_glClearColor, "glClearColor", &missing);
@@ -128,6 +131,7 @@ bool gles_loader_init(void)
     gles_load_one((void **)&gles_glGenVertexArrays, "glGenVertexArrays", &missing);
     gles_load_one((void **)&gles_glGetAttribLocation, "glGetAttribLocation", &missing);
     gles_load_one((void **)&gles_glGetBufferParameteriv, "glGetBufferParameteriv", &missing);
+    gles_load_one((void **)&gles_glGetError, "glGetError", &missing);
     gles_load_one((void **)&gles_glGetIntegerv, "glGetIntegerv", &missing);
     gles_load_one((void **)&gles_glGetProgramInfoLog, "glGetProgramInfoLog", &missing);
     gles_load_one((void **)&gles_glGetProgramiv, "glGetProgramiv", &missing);
@@ -156,7 +160,7 @@ bool gles_loader_init(void)
     gles_load_one((void **)&gles_glVertexAttribPointer, "glVertexAttribPointer", &missing);
     gles_load_one((void **)&gles_glViewport, "glViewport", &missing);
 
-    openjkdf2_trace_fmt("gles_loader: %d symbols loaded, %d missing", 69 - missing, missing);
+    openjkdf2_trace_fmt("gles_loader: %d symbols loaded, %d missing", 71 - missing, missing);
     return missing == 0;
 }
 

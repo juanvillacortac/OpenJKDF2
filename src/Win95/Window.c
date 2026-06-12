@@ -217,6 +217,16 @@ static void Window_LogicalFromPanelCoords(int panelX, int panelY, int *outX, int
     *outY = panelY;
 }
 
+void Window_SetPresentViewport(void)
+{
+    if (openjkdf2_IsHandheld() && Window_bForcedResolution && Window_presentW > 0 && Window_presentH > 0) {
+        glViewport(Window_presentX, Window_presentY, Window_presentW, Window_presentH);
+        return;
+    }
+
+    glViewport(0, 0, Window_xSize, Window_ySize);
+}
+
 void Window_BeginScreenDraw(void)
 {
     if (!openjkdf2_IsHandheld())
@@ -228,7 +238,7 @@ void Window_BeginScreenDraw(void)
     glViewport(0, 0, Window_physXSize, Window_physYSize);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    glViewport(Window_presentX, Window_presentY, Window_presentW, Window_presentH);
+    Window_SetPresentViewport();
 }
 #endif /* SDL2_RENDER */
 
