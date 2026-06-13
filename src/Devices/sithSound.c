@@ -36,7 +36,10 @@ int sithSound_Startup()
     else
         sithSound_maxDataLoaded = 0x200000;
 #elif defined(QOL_IMPROVEMENTS)
-    sithSound_maxDataLoaded = 0x4000000; // 64MiB
+    if (openjkdf2_bIsLowMemoryPlatform)
+        sithSound_maxDataLoaded = 0x1000000; // 16MiB on ~1GB handhelds
+    else
+        sithSound_maxDataLoaded = 0x4000000; // 64MiB
 #endif
 
     if ( stdSound_Startup() )

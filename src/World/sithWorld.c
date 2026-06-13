@@ -17,6 +17,8 @@
 #include "Devices/sithConsole.h"
 #include "General/stdFnames.h"
 #include "Engine/rdColormap.h"
+#include "Engine/rdMaterial.h"
+#include "Platform/handheld.h"
 #include "World/sithThing.h"
 #include "World/sithSector.h"
 #include "World/jkPlayer.h"
@@ -147,6 +149,10 @@ int sithWorld_Load(sithWorld *pWorld, char *map_jkl_fname)
 #if defined(SDL2_RENDER) || defined(TARGET_TWL)
     std3D_PurgeEntireTextureCache();
 #endif
+#if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
+    if (openjkdf2_bIsLowMemoryPlatform)
+        rdMaterial_PurgeEntireMaterialCache();
+#endif
 
     if ( map_jkl_fname )
     {
@@ -196,6 +202,9 @@ LABEL_11:
                         // Added
                         _sprintf(tmp, "%f seconds to parse section %s -- FAILED!\n", (flex32_t)v6 * 0.001, section);
                         sithConsole_Print(tmp);
+#if defined(TARGET_LINUX_GLES) || defined(SDL2_RENDER)
+                        stdPlatform_Printf("OpenJKDF2: sithWorld_Load section '%s' FAILED in '%s'\n", section, v8);
+#endif
 #ifdef TARGET_TWL
                         stdPlatform_PrintHeapStats();
 #endif
@@ -708,6 +717,9 @@ int sithWorld_LoadGeoresource(sithWorld *pWorld, int a2)
     
     if (!pWorld->colormaps)
     {
+#if defined(TARGET_LINUX_GLES) || defined(SDL2_RENDER)
+        stdPlatform_Printf("OpenJKDF2: sithWorld_LoadGeoresource colormaps alloc failed (%u)\n", numColormaps);
+#endif
         return 0;
     }
 
@@ -743,6 +755,9 @@ int sithWorld_LoadGeoresource(sithWorld *pWorld, int a2)
     pWorld->vertices = (rdVector3 *)pSithHS->alloc(sizeof(rdVector3) * numVertices);
     if (!pWorld->vertices)
     {
+#if defined(TARGET_LINUX_GLES) || defined(SDL2_RENDER)
+        stdPlatform_Printf("OpenJKDF2: sithWorld_LoadGeoresource vertices alloc failed (%u)\n", numVertices);
+#endif
         return 0;
     }
 
@@ -777,6 +792,9 @@ int sithWorld_LoadGeoresource(sithWorld *pWorld, int a2)
     pWorld->vertexUVs = (rdVector2 *)pSithHS->alloc(sizeof(rdVector2) * textureVertices);
     if (!pWorld->vertexUVs)
     {
+#if defined(TARGET_LINUX_GLES) || defined(SDL2_RENDER)
+        stdPlatform_Printf("OpenJKDF2: sithWorld_LoadGeoresource vertexUVs alloc failed (%u)\n", textureVertices);
+#endif
         return 0;
     }
 

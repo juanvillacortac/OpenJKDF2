@@ -1674,6 +1674,7 @@ int Window_Main_Linux(int argc, char** argv)
     // Init SDL
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
     openjkdf2_InitHandheldMode();
+    openjkdf2_InitLowMemoryMode();
     {
         const char *app_name = getenv("SDL_HINT_APP_NAME");
         if (!app_name || !app_name[0])

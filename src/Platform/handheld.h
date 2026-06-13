@@ -5,4 +5,12 @@
 void openjkdf2_InitHandheldMode(void);
 int openjkdf2_IsHandheld(void);
 
+/*
+ * Low-memory tuning for 1 GB handhelds (sound cache cap, material purge).
+ * OPENJKDF2_LOW_MEMORY=1 forces on, =0 forces off; unset auto-detects via /proc/meminfo.
+ * Does not skip cutscenes.
+ */
+void openjkdf2_InitLowMemoryMode(void);
+int openjkdf2_IsLowMemoryMode(void);
+
 #endif

@@ -1049,7 +1049,8 @@ int rdMaterial_PurgeMaterialCache()
     // TODO: maybe be gentler here and have like, a 60 frame buffer
 
     int purgedAnything = 0;
-    int purgeLimit = 240;
+    int purgeLimit = openjkdf2_bIsLowMemoryPlatform ? 60 : 240;
+    int purgeStep = openjkdf2_bIsLowMemoryPlatform ? 10 : 20;
     rdMaterial* pNextCachedMaterial = NULL;
     while (!purgedAnything) {
         for ( rdMaterial* pCacheMaterial = rdMaterial_pFirstMatCache; pCacheMaterial; pCacheMaterial = pNextCachedMaterial )
@@ -1072,7 +1073,7 @@ int rdMaterial_PurgeMaterialCache()
                 break;
             }
         }
-        purgeLimit -= 20;
+        purgeLimit -= purgeStep;
         if (purgeLimit <= 0) {
             break;
         }
