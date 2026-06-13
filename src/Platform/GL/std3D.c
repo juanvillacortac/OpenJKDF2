@@ -67,6 +67,10 @@ static size_t std3D_menuVboCap;
 static size_t std3D_menuIboCap;
 static int std3D_menuBufferDirty = 1;
 
+#if defined(TARGET_LINUX_GLES)
+static int std3D_menuTexIsRgba = 0;
+#endif
+
 static void std3D_uploadBuffer(GLuint buf, GLenum target, size_t size, const void *data, size_t *cap)
 {
     glBindBuffer(target, buf);
@@ -90,6 +94,16 @@ void std3D_MarkMenuBufferDirty(void)
 {
     std3D_menuBufferDirty = 1;
 }
+
+#if defined(TARGET_LINUX_GLES)
+static void std3D_SyncDisplayPalette(int force);
+
+void std3D_NotifyMenuPaletteChange(void)
+{
+    std3D_MarkMenuBufferDirty();
+    std3D_SyncDisplayPalette(1);
+}
+#endif
 
 #define TEX_MODE_TEST 0
 #define TEX_MODE_WORLDPAL 1
@@ -176,6 +190,12 @@ GLint uniform_light_mult, uniform_displacement_factor, uniform_iResolution;
 
 GLint programMenu_attribute_coord3d, programMenu_attribute_v_color, programMenu_attribute_v_uv, programMenu_attribute_v_norm;
 GLint programMenu_uniform_mvp, programMenu_uniform_tex, programMenu_uniform_displayPalette;
+GLint programMenu_uniform_worldPalette, programMenu_uniform_menuIndexed;
+
+#if defined(TARGET_LINUX_GLES)
+static uint8_t *std3D_cutsceneRgbaCache = NULL;
+static size_t std3D_cutsceneRgbaCacheBytes = 0;
+#endif
 
 static GLint programDefault_cached_attribute_coord3d, programDefault_cached_attribute_v_color;
 static GLint programDefault_cached_attribute_v_light, programDefault_cached_attribute_v_uv;
@@ -740,6 +760,8 @@ int init_resources()
     programMenu_uniform_mvp = std3D_tryFindUniform(programMenu, "mvp");
     programMenu_uniform_tex = std3D_tryFindUniform(programMenu, "tex");
     programMenu_uniform_displayPalette = std3D_tryFindUniform(programMenu, "displayPalette");
+    programMenu_uniform_worldPalette = std3D_tryFindUniform(programMenu, "worldPalette");
+    programMenu_uniform_menuIndexed = std3D_tryFindUniform(programMenu, "u_menuIndexed");
     
     // Blank texture
     glGenTextures(1, &blank_tex);
@@ -949,6 +971,11 @@ void std3D_FreeResources()
         jkgm_aligned_free(worldpal_lights_data);
     if (displaypal_data)
         jkgm_aligned_free(displaypal_data);
+#if defined(TARGET_LINUX_GLES)
+    free(std3D_cutsceneRgbaCache);
+    std3D_cutsceneRgbaCache = NULL;
+    std3D_cutsceneRgbaCacheBytes = 0;
+#endif
 
     blank_data = NULL;
     blank_data_white = NULL;
@@ -990,6 +1017,109 @@ void std3D_FreeResources()
 
     has_initted = false;
 }
+
+static void std3D_SyncDisplayPalette(int force)
+{
+    if (!displaypal_data)
+        return;
+    if (force || memcmp(displaypal_data, stdDisplay_masterPalette, 0x300)) {
+        glBindTexture(GL_TEXTURE_2D, displaypal_texture);
+        memcpy(displaypal_data, stdDisplay_masterPalette, 0x300);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 1, GL_RGB, GL_UNSIGNED_BYTE, displaypal_data);
+    }
+}
+
+#if defined(TARGET_LINUX_GLES)
+static int std3D_glesUploadCutsceneMenuAsRgba(uint8_t *menuPixels, uint32_t width, uint32_t height, uint32_t rowStride)
+{
+    size_t rgbaBytes;
+    uint32_t x;
+    uint32_t y;
+    uint8_t *dst;
+    uint8_t idx;
+    rdColor24 *pal;
+
+    if (!menuPixels || !width || !height || rowStride < width)
+        return 0;
+
+    rgbaBytes = (size_t)width * (size_t)height * 4u;
+    if (!std3D_cutsceneRgbaCache || std3D_cutsceneRgbaCacheBytes < rgbaBytes) {
+        free(std3D_cutsceneRgbaCache);
+        std3D_cutsceneRgbaCache = (uint8_t *)malloc(rgbaBytes);
+        if (!std3D_cutsceneRgbaCache) {
+            std3D_cutsceneRgbaCacheBytes = 0;
+            return 0;
+        }
+        std3D_cutsceneRgbaCacheBytes = rgbaBytes;
+    }
+
+    pal = stdDisplay_masterPalette;
+    dst = std3D_cutsceneRgbaCache;
+    for (y = 0; y < height; y++) {
+        for (x = 0; x < width; x++) {
+            idx = menuPixels[(y * rowStride) + x];
+            if (!idx) {
+                dst[0] = 0;
+                dst[1] = 0;
+                dst[2] = 0;
+                dst[3] = 255;
+            } else {
+                dst[0] = pal[idx].r;
+                dst[1] = pal[idx].g;
+                dst[2] = pal[idx].b;
+                dst[3] = 255;
+            }
+            dst += 4;
+        }
+    }
+
+    glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, std3D_cutsceneRgbaCache);
+    std3D_menuTexIsRgba = 1;
+    return 1;
+}
+
+static void std3D_glesEnsureMenuTexIndexed(uint8_t *menuPixels, uint32_t width, uint32_t height, uint32_t rowStride)
+{
+    if (!Video_menuTexId) {
+        stdDisplay_EnsureMenuGLTextures();
+        if (!Video_menuTexId)
+            return;
+    }
+
+    glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    if (rowStride != width)
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, rowStride);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, menuPixels);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    std3D_menuTexIsRgba = 0;
+}
+
+void std3D_LeaveCutsceneMenuMode(void)
+{
+    uint8_t *menuPixels;
+    uint32_t menuW;
+    uint32_t menuH;
+    uint32_t menuStride;
+
+    free(std3D_cutsceneRgbaCache);
+    std3D_cutsceneRgbaCache = NULL;
+    std3D_cutsceneRgbaCacheBytes = 0;
+
+    menuPixels = stdDisplay_VBufferPixels(&Video_menuBuffer);
+    menuW = Video_menuBuffer.format.width;
+    menuH = Video_menuBuffer.format.height;
+    menuStride = Video_menuBuffer.format.width_in_bytes;
+    if (menuPixels && menuW && menuH)
+        std3D_glesEnsureMenuTexIndexed(menuPixels, menuW, menuH, menuStride);
+    else
+        std3D_menuTexIsRgba = 1;
+
+    std3D_MarkMenuBufferDirty();
+}
+#endif
 
 int std3D_StartScene()
 {
@@ -1079,12 +1209,7 @@ int std3D_StartScene()
         loaded_colormap = sithWorld_pCurrentWorld->colormaps;
     }
 
-    if (memcmp(displaypal_data, stdDisplay_masterPalette, 0x300))
-    {
-        glBindTexture(GL_TEXTURE_2D, displaypal_texture);
-        memcpy(displaypal_data, stdDisplay_masterPalette, 0x300);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 1, GL_RGB, GL_UNSIGNED_BYTE, displaypal_data);
-    }
+    std3D_SyncDisplayPalette(0);
 
 #if 0
     // New random values
@@ -1532,7 +1657,7 @@ void std3D_DrawMenu()
         GL_tmpVerticesAmt = 0;
         GL_tmpTrisAmt = 0;
 
-        glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         /* Full 640x480 buffer (video centered in GLES jkCutscene) — same as menus. */
         std3D_DrawMenuSubrect(0, 0, 640, 480, menu_x, menu_y, menu_w / 640.0);
@@ -1583,17 +1708,39 @@ void std3D_DrawMenu()
     
     glActiveTexture(GL_TEXTURE0 + 0);
     glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
-#if !defined(TARGET_LINUX_GLES)
-    if (std3D_menuBufferDirty)
-#endif
     {
         uint8_t *menuPixels = stdDisplay_VBufferPixels(&Video_menuBuffer);
-        if (menuPixels) {
-            glPixelStorei(GL_UNPACK_ROW_LENGTH, Video_menuBuffer.format.width);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, Video_menuBuffer.format.width, Video_menuBuffer.format.height, GL_RED, GL_UNSIGNED_BYTE, menuPixels);
+        uint32_t menuW = Video_menuBuffer.format.width;
+        uint32_t menuH = Video_menuBuffer.format.height;
+        uint32_t menuStride = Video_menuBuffer.format.width_in_bytes;
+        int menuIndexed = 1;
+
+#if defined(TARGET_LINUX_GLES)
+        std3D_SyncDisplayPalette(jkCutscene_isRendering);
+        if (jkCutscene_isRendering && menuPixels && menuW && menuH) {
+            if (std3D_glesUploadCutsceneMenuAsRgba(menuPixels, menuW, menuH, menuStride))
+                menuIndexed = 0;
+        } else if (std3D_menuTexIsRgba) {
+            std3D_glesEnsureMenuTexIndexed(menuPixels, menuW, menuH, menuStride);
+            menuIndexed = 1;
+        } else if (menuIndexed && menuPixels) {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, menuStride);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, menuW, menuH, GL_RED, GL_UNSIGNED_BYTE, menuPixels);
             glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
         }
+#else
+#if !defined(TARGET_LINUX_GLES)
+        if (std3D_menuBufferDirty)
+#endif
+        if (menuIndexed && menuPixels) {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, menuStride);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, menuW, menuH, GL_RED, GL_UNSIGNED_BYTE, menuPixels);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        }
+#endif
         std3D_menuBufferDirty = 0;
+
+        glUniform1i(programMenu_uniform_menuIndexed, menuIndexed);
     }
 
     //GLushort data_elements[32 * 3];
@@ -1603,6 +1750,8 @@ void std3D_DrawMenu()
     glActiveTexture(GL_TEXTURE0 + 0);
     glUniform1i(programMenu_uniform_tex, 0);
     glUniform1i(programMenu_uniform_displayPalette, 1);
+    if (programMenu_uniform_worldPalette >= 0)
+        glUniform1i(programMenu_uniform_worldPalette, 1);
 
     D3DVERTEX* vertexes = GL_tmpVertices;
 

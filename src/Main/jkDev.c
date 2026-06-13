@@ -20,6 +20,8 @@
 #include "Main/jkQuakeConsole.h"
 #include "stdPlatform.h"
 #include "wprintf.h"
+#include "Win95/Window.h"
+#include "Win95/Video.h"
 #include "Dss/sithMulti.h"
 #include "Dss/sithGamesave.h"
 #include "Dss/jkDSS.h"
@@ -29,6 +31,27 @@
 void jkDev_DrawEntriesGPU();
 void jkDev_BlitLogToScreenGPU();
 void jkDev_RenderQuakeConsole();
+
+static flex_t jkDev_GetMessageTextScale(void)
+{
+    flex_t textScale = jkPlayer_hudScale;
+
+    if (jkDev_BMFontHeight > 11)
+        textScale *= 11.0 / (flex_t)jkDev_BMFontHeight;
+    return textScale;
+}
+
+static void jkDev_GetMessageBand(int *outBandX, int *outBandW)
+{
+    int layoutW = Video_format.width > 0 ? Video_format.width : (int)stdDisplay_pCurVideoMode->format.width;
+
+    if (layoutW <= 0)
+        layoutW = 640;
+    *outBandX = HUD_SCALED(48);
+    *outBandW = layoutW - HUD_SCALED(96);
+    if (*outBandW < HUD_SCALED(64))
+        *outBandW = HUD_SCALED(64);
+}
 
 // MOTS altered
 void jkDev_Startup()
@@ -288,6 +311,10 @@ void jkDev_BlitLogToScreenGPU()
     int v5; // ecx
     int v6; // eax
     rdRect v7; // [esp+0h] [ebp-10h] BYREF
+    flex_t textScale;
+    int bandX;
+    int bandW;
+    int lineH;
 
     // Added: Prevent crashes
     if ( Main_bNoHUD )
@@ -295,35 +322,39 @@ void jkDev_BlitLogToScreenGPU()
 
     if (!jkDev_vbuf) return;
 
+    textScale = jkDev_GetMessageTextScale();
+    jkDev_GetMessageBand(&bandX, &bandW);
+
     v7.x = 0;
     v7.y = 0;
-    v7.height = (int)((flex_t)jkDev_BMFontHeight * jkPlayer_hudScale);
-    v1 = 4;
+    v7.height = (int)((flex_t)jkDev_BMFontHeight * textScale);
+    v1 = HUD_SCALED(4);
     v2 = 0;
     v3 = &jkDev_aEntries[0];
     for (int i = 0; i < 5; i++)
     {
         if ( v2 < jkDev_log_55A4A4 && (v1 + v7.height > Video_pCanvas->yStart || v3->bDrawEntry) )
         {
+            stdFont_DrawMultilineCenteredGPU(jkHud_pMsgFontSft, bandX, v1, bandW, v3->text, 1, textScale);
             v7.width = v3->drawWidth;
-            v4 = (signed int)(stdDisplay_pCurVideoMode->format.width - v7.width) / 2;
+            v4 = bandX + ((bandW - (signed int)v7.width) / 2);
             if ( v4 < 0 )
                 v4 = 0;
-            //stdDisplay_VBufferCopy(Video_pMenuBuffer, jkDev_vbuf, v4, v1, &v7, 1);
-            stdFont_DrawMultilineCenteredGPU(jkHud_pMsgFontSft, 0, v1, stdDisplay_pCurVideoMode->format.width, v3->text, 1, jkPlayer_hudScale);
             v5 = v7.width;
             v6 = jkDev_dword_55A9D0 + 2 * v2;
             jkDev_aEntryPositions[v6].x = v4;
             jkDev_aEntryPositions[v6].y = v5;
-            //printf("Draw?\n %u %u\n", v4, v1);
         }
         if ( v3->bDrawEntry > 0 )
             --v3->bDrawEntry;
-        //v1 += (int)((flex_t)jkDev_BMFontHeight * jkPlayer_hudScale);
-        v1 += stdFont_DrawMultilineCenteredHeight(jkHud_pMsgFontSft, 0, v1, stdDisplay_pCurVideoMode->format.width, v3->text, 1, jkPlayer_hudScale);
+        lineH = (int)stdFont_DrawMultilineCenteredHeight(jkHud_pMsgFontSft, bandX, v1, bandW, v3->text, 1, textScale);
+        if (lineH > 0)
+            v1 += lineH;
+        else
+            v1 += (int)((flex_t)jkDev_BMFontHeight * textScale);
         ++v3;
         ++v2;
-        v7.y += (int)((flex_t)jkDev_BMFontHeight * jkPlayer_hudScale);
+        v7.y += (int)((flex_t)jkDev_BMFontHeight * textScale);
     }
     jkDev_dword_55A9D0 = (jkDev_dword_55A9D0 + 1) % 2;
 }
@@ -1169,6 +1200,12 @@ void jkDev_DrawEntriesGPU()
     signed int v1; // edi
     jkDevLogEnt* v3; // esi
     rdRect a4; // [esp+8h] [ebp-10h] BYREF
+    flex_t textScale;
+    int bandX;
+    int bandW;
+
+    textScale = jkDev_GetMessageTextScale();
+    jkDev_GetMessageBand(&bandX, &bandW);
 
     v0 = 0;
     if ( jkDev_vbuf )
@@ -1184,14 +1221,14 @@ void jkDev_DrawEntriesGPU()
                 {
                     //if ( v3->bDrawEntry )
                     {
-                        a4.height = (int)((flex_t)jkDev_BMFontHeight * jkPlayer_hudScale);
+                        a4.height = (int)((flex_t)jkDev_BMFontHeight * textScale);
                         a4.width = v3->drawWidth;
                         a4.x = 0;
                         a4.y = v1;
-                        stdDisplay_VBufferFill(jkDev_vbuf, jkDev_ColorKey, &a4); // jkDev_vbuf->format.width
-                        v3->drawWidth = stdFont_Draw1Width(jkHud_pMsgFontSft, 0, v1, Video_menuBuffer.format.width, v3->text, 0, jkPlayer_hudScale);
+                        stdDisplay_VBufferFill(jkDev_vbuf, jkDev_ColorKey, &a4);
+                        v3->drawWidth = stdFont_Draw1Width(jkHud_pMsgFontSft, 0, v1, bandW, v3->text, 0, textScale);
                     }
-                    v1 += (int)((flex_t)jkDev_BMFontHeight * jkPlayer_hudScale);
+                    v1 += (int)((flex_t)jkDev_BMFontHeight * textScale);
                     ++v0;
                     ++v3;
                 }

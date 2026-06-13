@@ -136,6 +136,8 @@ void std3D_ComputeMenuRect(double winW, double winH, double *outX, double *outY,
 void std3D_MarkMenuBufferDirty(void);
 #if defined(TARGET_LINUX_GLES)
 void std3D_InvalidateGLContext(void);
+void std3D_NotifyMenuPaletteChange(void);
+void std3D_LeaveCutsceneMenuMode(void);
 #endif
 
 #ifdef __cplusplus

@@ -229,12 +229,15 @@ LABEL_19:
         sithWorld_bLoaded = 1;
         return 1;
     }
+    stdPlatform_Printf("OpenJKDF2: sithWorld_NewEntry failed (out of memory?) for '%s'\n", v8);
     goto cleanup;
 
 failed_open:
+    stdPlatform_Printf("OpenJKDF2: sithWorld_Load failed to open '%s'\n", v8);
     stdPrintf(pSithHS->errorPrint, ".\\World\\sithWorld.c", 276, "Failed to open file '%s'.\n", v8);
     goto cleanup;
 parse_problem:
+    stdPlatform_Printf("OpenJKDF2: sithWorld_Load parse error in '%s'\n", v8);
     stdPrintf(pSithHS->errorPrint, ".\\World\\sithWorld.c", 276, "Parse problem in file '%s'.\n", v8);
     goto cleanup;
 cleanup:

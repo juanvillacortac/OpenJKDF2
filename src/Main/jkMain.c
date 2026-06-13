@@ -583,6 +583,10 @@ void jkMain_GameplayShow(int a1, int a2)
         jkGuiTitle_LoadingFinalize();
         if ( !level_loaded )
         {
+#if defined(TARGET_LINUX_GLES)
+            stdPlatform_Printf("OpenJKDF2: level load failed for '%s' (gameMode=%d)\n",
+                jkMain_aLevelJklFname, jkSmack_gameMode);
+#endif
             if ( jkGame_isDDraw )
             {
                 Windows_ShutdownGdi();

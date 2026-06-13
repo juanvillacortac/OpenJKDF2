@@ -322,6 +322,7 @@ int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
     if (palette)
     {
         memcpy(stdDisplay_gammaPalette, palette, 0x300);
+        stdDisplay_SetMasterPalette((uint8_t*)palette);
     }
     
     Video_menuBuffer.format.width_in_pixels = newW;

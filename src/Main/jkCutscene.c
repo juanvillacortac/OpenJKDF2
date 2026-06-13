@@ -52,10 +52,17 @@ static stdSound_buffer_t* jkCutscene_currentAudio = NULL;
 
 static int jkCutscene_videoBufY(void)
 {
-    if (openjkdf2_IsHandheld()) {
-        int vh = Main_bMotsCompat ? 350 : 300;
+    int vh;
+
+    if (jkCutscene_smk_h > 0 && jkCutscene_smk_h < 480)
+        vh = (int)jkCutscene_smk_h;
+    else if (openjkdf2_IsHandheld())
+        vh = Main_bMotsCompat ? 350 : 300;
+    else
+        return 50;
+
+    if (openjkdf2_IsHandheld())
         return (480 - vh) / 2;
-    }
     return 50;
 }
 
@@ -438,6 +445,7 @@ int jkCutscene_sub_421310(char* fpath)
         // TODO kinda hacky
         //jkGui_SetModeMenu(smk_get_palette(jkCutscene_smk));
         jkGui_SetModeMenu(smk_get_palette(jkCutscene_smk));
+        stdDisplay_SetMasterPalette((uint8_t*)smk_get_palette(jkCutscene_smk));
     }
     else {
 #ifdef TARGET_TWL
@@ -514,7 +522,7 @@ int jkCutscene_sub_421310(char* fpath)
 	stdDisplay_VBufferFill(Video_pMenuBuffer, 0, NULL);
 	
 	stdDisplay_VBufferLock(Video_pMenuBuffer);
-	stdDisplay_VBufferCopy(Video_pMenuBuffer, jkCutscene_frameBuf, 0, 0, NULL, 0);
+	stdDisplay_VBufferCopy(Video_pMenuBuffer, jkCutscene_frameBuf, 0, jkCutscene_videoBufY(), NULL, 0);
 #ifdef TARGET_TWL
     stdDisplay_VBufferFill(Video_pMenuBuffer, 0, &jkCutscene_rect1);
 #endif
@@ -589,6 +597,11 @@ int jkCutscene_sub_421410()
     last_audioUs = 0;
     extraUs = 0;
 
+#if defined(TARGET_LINUX_GLES)
+    jkGui_RestoreMenuPaletteAfterCutscene();
+    stdDisplay_VBufferFill(Video_pMenuBuffer, 0, NULL);
+    std3D_LeaveCutsceneMenuMode();
+#endif
     jkCutscene_isRendering = 0;
     jkGui_SetModeGame(); // Added?
     jk_ShowCursor(1);
@@ -628,6 +641,11 @@ int jkCutscene_smack_related_loops()
 #if !defined(SDL2_RENDER) && !defined(TARGET_TWL)
                 if (!openjkdf2_bIsKVM)
                     smack_sub_426940();
+#endif
+#if defined(TARGET_LINUX_GLES)
+                jkGui_RestoreMenuPaletteAfterCutscene();
+                stdDisplay_VBufferFill(Video_pMenuBuffer, 0, NULL);
+                std3D_LeaveCutsceneMenuMode();
 #endif
                 jkCutscene_isRendering = 0;
                 jk_ShowCursor(1);

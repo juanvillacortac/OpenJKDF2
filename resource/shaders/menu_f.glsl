@@ -1,6 +1,7 @@
 uniform sampler2D tex;
 uniform sampler2D worldPalette;
 uniform sampler2D displayPalette;
+uniform int u_menuIndexed;
 in vec4 f_color;
 in vec2 f_uv;
 out vec4 fragColor;
@@ -8,17 +9,21 @@ out vec4 fragColor;
 void main(void)
 {
     vec4 sampled = texture(tex, f_uv);
-    vec4 sampled_color = vec4(0.0, 0.0, 0.0, 0.0);
     vec4 vertex_color = f_color;
+
+    if (u_menuIndexed == 0) {
+        if (sampled.a < 0.01)
+            discard;
+        fragColor = vec4(sampled.rgb, 1.0) * vertex_color;
+        return;
+    }
+
     float index = sampled.r;
-    vec4 palval = texture(worldPalette, vec2(index, 0.5));
-    vec4 palvald = texture(displayPalette, vec2(index, 0.5));
-    vec4 blend = vec4(1.0, 1.0, 1.0, 1.0);
+    float palU = (index * 255.0 + 0.5) / 256.0;
+    vec4 palvald = texture(displayPalette, vec2(palU, 0.5));
 
-    float transparency = 1.0;
-    if (index == 0.0)
+    if (index < 0.001)
         discard;
-    sampled_color = vec4(palvald.r, palvald.g, palvald.b, transparency);
 
-    fragColor = sampled_color * vertex_color * blend;
+    fragColor = vec4(palvald.rgb, 1.0) * vertex_color;
 }

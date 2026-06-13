@@ -313,6 +313,16 @@ int jkRes_NewGob(jkResGobDirectory *gobFullpath, char *gobFolder, char *gobFname
     
     gobFullpath->numGobs = 0;
     stdString_snprintf(jkRes_idkGobPath, 0x80u, "%s%c%s", gobFolder, LEC_PATH_SEPARATOR_CHR, gobFname);
+    if (!util_FileExistsLowLevel(jkRes_idkGobPath) && Main_bMotsCompat) {
+        size_t pathLen = _strlen(jkRes_idkGobPath);
+        if (pathLen > 4 && !__strcmpi(jkRes_idkGobPath + pathLen - 4, ".goo")) {
+            char altPath[128];
+            stdString_SafeStrCopy(altPath, jkRes_idkGobPath, sizeof(altPath));
+            altPath[pathLen - 1] = 'b';
+            if (util_FileExistsLowLevel(altPath))
+                stdString_SafeStrCopy(jkRes_idkGobPath, altPath, sizeof(jkRes_idkGobPath));
+        }
+    }
     if ( util_FileExistsLowLevel(jkRes_idkGobPath) ) // Added: util_FileExists -> util_FileExistsLowLevel
     {
         if ( gobFullpath->numGobs < STDGOB_MAX_GOBS )

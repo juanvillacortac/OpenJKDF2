@@ -36,5 +36,6 @@ char *jkGui_sub_412EC0();
 wchar_t* jkGui_sub_412ED0();
 
 void jkGui_LoadBmIdx(int idx); // Added
+void jkGui_RestoreMenuPaletteAfterCutscene(void);
 
 #endif // _JKGUI_H

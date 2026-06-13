@@ -9,6 +9,7 @@
 #include "Primitives/rdVector.h"
 #include "Win95/stdDisplay.h"
 #include "Platform/stdControl.h"
+#include "Platform/std3D.h"
 #include "Win95/Window.h"
 #include "Win95/stdGdi.h"
 #include "Platform/wuRegistry.h"
@@ -256,6 +257,22 @@ void jkGui_LoadBmIdx(int idx) {
     }
 }
 
+void jkGui_RestoreMenuPaletteAfterCutscene(void)
+{
+    stdBitmap *bg;
+
+    bg = jkGui_stdBitmaps[JKGUI_BM_BK_MAIN];
+    if (!bg)
+        return;
+    stdBitmap_EnsureData(bg);
+    if (!bg->palette)
+        return;
+    stdDisplay_SetMasterPalette((uint8_t*)bg->palette);
+#if defined(TARGET_LINUX_GLES)
+    std3D_NotifyMenuPaletteChange();
+#endif
+}
+
 int jkGui_Startup()
 {
     char playerShortName[32];
@@ -471,6 +488,11 @@ int jkGui_SetModeMenu(const void *palette)
     openjkdf2_trace("jkGui_SetModeMenu: before SetMode");
     if ( !v3 && stdDisplay_bModeSet && v4 == Video_curMode && stdDisplay_bPaged == 1 || stdDisplay_SetMode(v4, palette, 1) )
     {
+        if (palette)
+            stdDisplay_SetMasterPalette((uint8_t*)palette);
+#if defined(TARGET_LINUX_GLES)
+        std3D_NotifyMenuPaletteChange();
+#endif
         openjkdf2_trace("jkGui_SetModeMenu: after SetMode");
         jkGuiRend_Open(&Video_menuBuffer, &Video_otherBuf, 0);
         openjkdf2_trace("jkGui_SetModeMenu: after Rend_Open");
