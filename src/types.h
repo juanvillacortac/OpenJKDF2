@@ -444,6 +444,7 @@ extern int32_t openjkdf2_bOrigWasDF2;
 extern int32_t openjkdf2_restartMode;
 extern int32_t openjkdf2_bIsLowMemoryPlatform;
 extern int32_t openjkdf2_bIsExtraLowMemoryPlatform;
+extern int32_t openjkdf2_bTextureLodReduced;
 extern char openjkdf2_aRestartPath[256];
 extern int32_t Main_bMotsCompat;
 extern int32_t Main_bDwCompat;

@@ -6,6 +6,7 @@
 #include "Engine/rdColormap.h"
 #include "General/stdMath.h"
 #include "stdPlatform.h"
+#include "jk.h"
 
 #include <math.h>
 
@@ -502,7 +503,15 @@ int rdCache_SendFaceListToHardware()
             }
 
             // Look for the closest mipmap that's been loaded
-#ifdef TARGET_TWL
+#if defined(TARGET_TWL) || defined(TARGET_LINUX_GLES)
+            {
+            int search_loaded_mip = 0;
+#if defined(TARGET_TWL)
+            search_loaded_mip = 1;
+#elif defined(TARGET_LINUX_GLES)
+            search_loaded_mip = openjkdf2_bTextureLodReduced;
+#endif
+            if (search_loaded_mip) {
             int mipmap_level_orig = mipmap_level;
             stdVBuffer* mipmap = sith_tex_sel->texture_struct[mipmap_level];
 
@@ -530,6 +539,8 @@ int rdCache_SendFaceListToHardware()
 
             if (!mipmap) {
                 mipmap_level = mipmap_level_orig;
+            }
+            }
             }
 #endif
 

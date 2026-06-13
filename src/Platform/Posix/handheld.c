@@ -101,3 +101,36 @@ void openjkdf2_InitLowMemoryMode(void)
         }
     }
 }
+
+int openjkdf2_IsTextureLodReduced(void)
+{
+    return openjkdf2_bTextureLodReduced != 0;
+}
+
+void openjkdf2_InitTextureLodMode(void)
+{
+    const char *env = getenv("OPENJKDF2_TEXTURE_LOD");
+    int toggle = openjkdf2_parse_env_toggle(env);
+
+#if defined(TARGET_TWL)
+    openjkdf2_bTextureLodReduced = 1;
+    return;
+#endif
+
+    if (toggle == 1) {
+        openjkdf2_bTextureLodReduced = 1;
+        fprintf(stderr, "OpenJKDF2: reduced texture LOD enabled (OPENJKDF2_TEXTURE_LOD=1)\n");
+        return;
+    }
+
+    if (toggle == 0) {
+        openjkdf2_bTextureLodReduced = 0;
+        fprintf(stderr, "OpenJKDF2: reduced texture LOD disabled (OPENJKDF2_TEXTURE_LOD=0)\n");
+        return;
+    }
+
+    openjkdf2_bTextureLodReduced = openjkdf2_bIsLowMemoryPlatform;
+    if (openjkdf2_bTextureLodReduced) {
+        fprintf(stderr, "OpenJKDF2: reduced texture LOD enabled (low memory mode)\n");
+    }
+}

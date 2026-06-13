@@ -294,6 +294,13 @@ LABEL_21:
         texture->alphaMats[mipmap_num].height = format.height;
         texture->opaqueMats[mipmap_num].width = format.width;
         texture->opaqueMats[mipmap_num].height = format.height;
+#elif defined(TARGET_LINUX_GLES)
+        if (openjkdf2_bTextureLodReduced) {
+            texture->alphaMats[mipmap_num].width = format.width;
+            texture->alphaMats[mipmap_num].height = format.height;
+            texture->opaqueMats[mipmap_num].width = format.width;
+            texture->opaqueMats[mipmap_num].height = format.height;
+        }
 #endif
 
 #if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
@@ -303,7 +310,21 @@ LABEL_21:
         }
 #endif
 
-#if !defined(TARGET_TWL)
+        {
+        int load_mip = 1;
+#if defined(TARGET_TWL)
+        if (!(format.width <= 16 || mipmap_num >= texture->num_mipmaps - 1))
+            load_mip = 0;
+#elif defined(TARGET_LINUX_GLES)
+        if (openjkdf2_bTextureLodReduced && !(format.width <= 16 || mipmap_num >= texture->num_mipmaps - 1))
+            load_mip = 0;
+#endif
+
+        if (!load_mip) {
+            std_pHS->fseek(mat_file__, format.width*format.height*(format.format.is16bit?2:1), SEEK_CUR);
+            goto no_loading;
+        }
+
 #if !defined(TARGET_LINUX_GLES)
         printf("Load %s tex %d/%d mip %d/%d\n", mat_fpath, tex_numa, material->num_textures, mipmap_num, texture->num_mipmaps);
 #endif
@@ -315,8 +336,14 @@ LABEL_21:
           openjkdf2_trace_fmt("rdMaterial: VBufferNew failed %s %ux%u bpp=%u",
               mat_fpath, format.width, format.height, format.format.bpp);
 #endif
+#if defined(TARGET_TWL)
+          std_pHS->fseek(mat_file__, format.width*format.height*(format.format.is16bit?2:1), SEEK_CUR);
+          goto no_loading;
+#else
           break;
+#endif
         }
+        (*texture_struct)->format.texture_size_in_bytes = format.width*format.height*(format.format.is16bit?2:1);
         if ( texture->alpha_en & 1 )
           stdDisplay_VBufferSetColorKey(created_tex, texture->color_transparent);
         stdDisplay_VBufferLock(*texture_struct);
@@ -327,7 +354,11 @@ LABEL_21:
             openjkdf2_trace_fmt("rdMaterial: null pixels %s", mat_fpath);
 #endif
             stdDisplay_VBufferUnlock(*texture_struct);
+#if defined(TARGET_TWL)
+            goto no_loading;
+#else
             break;
+#endif
           }
           rdroid_pHS->fileRead(mat_file__, pix, (*texture_struct)->format.texture_size_in_bytes);
         }
@@ -336,42 +367,7 @@ LABEL_21:
 #if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
         material->bDataLoaded = bDoLoad;
 #endif
-
-#else
-        // Limit textures that are loaded on TWL
-        if ((format.width <= 16 || mipmap_num >= texture->num_mipmaps-1)) {
-            printf("Load %s tex %d/%d mip %d/%d\n", mat_fpath, tex_numa, material->num_textures, mipmap_num, texture->num_mipmaps);
-            created_tex = stdDisplay_VBufferNew(&format, create_ddraw_surface, gpu_mem, 0);
-            *texture_struct = created_tex;
-            material->bDataLoaded = bDoLoad;
-            if ( !created_tex ) {
-                /*mat_file_ = mat_file__;
-                rdroid_pHS->fileClose(mat_file_);
-                return 1;*/
-                std_pHS->fseek(mat_file__, format.width*format.height*(format.format.is16bit?2:1), SEEK_CUR);
-                goto no_loading;
-            }
-            (*texture_struct)->format.texture_size_in_bytes = format.width*format.height*(format.format.is16bit?2:1);
-            if ( texture->alpha_en & 1 )
-              stdDisplay_VBufferSetColorKey(created_tex, texture->color_transparent);
-            stdDisplay_VBufferLock(*texture_struct);
-            {
-              void *pix = stdDisplay_VBufferPixels(*texture_struct);
-              if (!pix) {
-                stdDisplay_VBufferUnlock(*texture_struct);
-                goto no_loading;
-              }
-              rdroid_pHS->fileRead(mat_file__, pix, (*texture_struct)->format.texture_size_in_bytes);
-            }
-            stdDisplay_VBufferUnlock(*texture_struct);
-#if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
-            material->bDataLoaded = bDoLoad;
-#endif
         }
-        else {
-            std_pHS->fseek(mat_file__, format.width*format.height*(format.format.is16bit?2:1), SEEK_CUR);
-        }
-#endif
 no_loading:
         format.width = (unsigned int)format.width >> 1;
         format.height = (unsigned int)format.height >> 1;
