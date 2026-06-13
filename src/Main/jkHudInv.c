@@ -17,6 +17,16 @@
 
 void jkHudInv_DrawGPU();
 
+static int jkHudInv_HudIconX(stdBitmap *pBmp, int layoutCenter, int slotIndex)
+{
+    const int slotStep = HUD_SCALED(32);
+    int w = 24;
+
+    if (pBmp && pBmp->mipSurfaces[0])
+        w = pBmp->mipSurfaces[0]->format.width;
+    return layoutCenter + slotIndex * slotStep - HUD_SCALED(w) / 2;
+}
+
 // MOTS added
 flex_t jkHud_aBinMaxAmt[SITHBIN_NUMBINS] = {0};
 
@@ -419,6 +429,7 @@ LABEL_84:
 void jkHudInv_DrawGPU()
 {
     const int layoutW = Video_format.width > 0 ? Video_format.width : 640;
+    const int invCenter = layoutW >> 1;
     sithThing *player; // ebx MAPDST
     int v1; // edi
     int v2; // ebp
@@ -452,13 +463,11 @@ void jkHudInv_DrawGPU()
     sithItemDescriptor *v32; // ebx
     stdBitmap *v33; // edi
     int v34; // esi
-    int v35; // ebp
     int v36; // edi
     unsigned int v38; // ebp
     int v39; // eax
     int a2; // [esp+14h] [ebp-2Ch]
     int idx; // [esp+18h] [ebp-28h]
-    int v43; // [esp+1Ch] [ebp-24h] BYREF
     char v44[4]; // [esp+20h] [ebp-20h] BYREF
     wchar_t a6[3]; // [esp+28h] [ebp-18h] BYREF
     wchar_t v48[3]; // [esp+30h] [ebp-10h] BYREF
@@ -606,12 +615,12 @@ void jkHudInv_DrawGPU()
                 return;
             }
             //stdDisplay_VBufferCopy(Video_pMenuBuffer, *v17->mipSurfaces, jkHudInv_info.field_0, jkHudInv_info.field_4, 0, 1);
-            std3D_DrawUIBitmap(v17, 0, jkHudInv_info.field_0, jkHudInv_info.field_4, NULL, jkPlayer_hudScale, 1);
+            v20 = jkHudInv_HudIconX(v17, invCenter, 0);
+            std3D_DrawUIBitmap(v17, 0, v20, jkHudInv_info.field_4, NULL, jkPlayer_hudScale, 1);
             if (v16->flags & ITEMINFO_ITEM)
             {
                 char tmpChars[4];
                 v19 = jkHudInv_info.field_4;
-                v20 = jkHudInv_info.field_0;
                 stdString_snprintf(tmpChars, 4, "%d", v18);
                 stdString_CharToWchar(a6, tmpChars, 3);
 
@@ -637,9 +646,8 @@ void jkHudInv_DrawGPU()
             }
         }
         v23 = a2;
-        v24 = HUD_SCALED(32);
         idx = a2;
-        v43 = HUD_SCALED(32);
+        v24 = 1;
         while ( 1 )
         {
             if ( v23 >= 0 )
@@ -656,11 +664,11 @@ void jkHudInv_DrawGPU()
                     if ( v27 <= 0 )
                         goto LABEL_84;
                     //stdDisplay_VBufferCopy(Video_pMenuBuffer, *v26->mipSurfaces, jkHudInv_info.field_0 - v24, jkHudInv_info.field_4, 0, 1);
-                    std3D_DrawUIBitmap(v26, 0, jkHudInv_info.field_0 - v24, jkHudInv_info.field_4, NULL, jkPlayer_hudScale, 1);
+                    v29 = jkHudInv_HudIconX(v26, invCenter, -v24);
+                    std3D_DrawUIBitmap(v26, 0, v29, jkHudInv_info.field_4, NULL, jkPlayer_hudScale, 1);
                     if (v25->flags & ITEMINFO_ITEM)
                     {
                         v28 = jkHudInv_info.field_4;
-                        v29 = jkHudInv_info.field_0 - v24;
                         stdString_snprintf(v44, 4, "%d", v27);
                         stdString_CharToWchar(v48, v44, 3);
 
@@ -705,15 +713,14 @@ LABEL_84:
                         jkHudInv_dword_553F94 = 0;
                         return;
                     }
-                    v35 = v43;
                     //stdDisplay_VBufferCopy(Video_pMenuBuffer, *v33->mipSurfaces, v43 + jkHudInv_info.field_0, jkHudInv_info.field_4, 0, 1);
-                    std3D_DrawUIBitmap(v33, 0, v43 + jkHudInv_info.field_0, jkHudInv_info.field_4, NULL, jkPlayer_hudScale, 1);
+                    v38 = jkHudInv_HudIconX(v33, invCenter, v24);
+                    std3D_DrawUIBitmap(v33, 0, v38, jkHudInv_info.field_4, NULL, jkPlayer_hudScale, 1);
                     
                     if (v32->flags & ITEMINFO_ITEM)
                     {
                         char tmpChars[4];
                         v36 = jkHudInv_info.field_4;
-                        v38 = jkHudInv_info.field_0 + v35;
                         stdString_snprintf(tmpChars, 4, "%d", v34);
                         stdString_CharToWchar(v50, tmpChars, 3);
 
@@ -741,10 +748,9 @@ LABEL_84:
                     }
                 }
             }
-            v24 = v43 + HUD_SCALED(32);
-            v43 += HUD_SCALED(32);
-            if ( v43 >= HUD_SCALED(96) )
+            if ( v24 * HUD_SCALED(32) >= HUD_SCALED(96) )
                 return;
+            ++v24;
             v23 = idx;
         }
     }
@@ -924,7 +930,7 @@ void jkHudInv_LoadItemRes()
     _memset(&jkHudInv_info, 0, sizeof(jkHudInvInfo));
     _memset(&jkHudInv_scroll, 0, sizeof(jkHudInvScroll));
     v8 = v7 - HUD_SCALED(36);
-    jkHudInv_info.field_0 = (v6 - HUD_SCALED(24)) >> 1;
+    jkHudInv_info.field_0 = (v6 >> 1) - HUD_SCALED(12);
     jkHudInv_info.drawRect.x = jkHudInv_info.field_0 - HUD_SCALED(64);
     v9 = HUD_SCALED(24);
     jkHudInv_info.field_4 = v7 - HUD_SCALED(36);
