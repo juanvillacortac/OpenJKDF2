@@ -248,7 +248,9 @@ void Window_SetHiDpi(int val)
     {
         Window_isHiDpi = val;
 
+#if !defined(TARGET_LINUX_GLES) && !defined(TARGET_ANDROID)
         Window_needsRecreate = 1;
+#endif
     }
 
     wuRegistry_SaveBool("Window_isHiDpi", Window_isHiDpi);
@@ -260,6 +262,7 @@ void Window_SetFullscreen(int val)
     {
         // Reset window when exiting fullscreen
         // TODO: Add settings for these sizes maybe?
+#if !defined(TARGET_LINUX_GLES) && !defined(TARGET_ANDROID)
         if (Window_isFullscreen && !val) {
             Window_xSize = WINDOW_DEFAULT_WIDTH;
             Window_ySize = WINDOW_DEFAULT_HEIGHT;
@@ -270,9 +273,12 @@ void Window_SetFullscreen(int val)
             Window_yPos = SDL_WINDOWPOS_CENTERED;
 #endif
         }
+#endif
 
         Window_isFullscreen = val;
+#if !defined(TARGET_LINUX_GLES) && !defined(TARGET_ANDROID)
         Window_needsRecreate = 1;
+#endif
     }
 
     wuRegistry_SaveBool("Window_isFullscreen", Window_isFullscreen);
@@ -547,6 +553,14 @@ SDL_Window* displayWindow = NULL;
 SDL_Event event;
 SDL_GLContext glWindowContext;
 
+static void Window_RestoreInputFocus(void)
+{
+    if (!displayWindow)
+        return;
+    SDL_RaiseWindow(displayWindow);
+    SDL_SetWindowInputFocus(displayWindow);
+}
+
 int Window_lastXRel = 0;
 int Window_lastYRel = 0;
 int Window_lastSampleTime = 0;
@@ -741,7 +755,8 @@ void Window_HandleWindowEvent(SDL_Event* event)
             //printf("Window %d closed", event->window.windowID);
             break;
         case SDL_WINDOWEVENT_TAKE_FOCUS:
-            //printf("Window %d is offered a focus", event->window.windowID);
+            if (displayWindow && event->window.windowID == SDL_GetWindowID(displayWindow))
+                Window_RestoreInputFocus();
             break;
         case SDL_WINDOWEVENT_HIT_TEST:
             //printf("Window %d has a special hit test", event->window.windowID);
@@ -1652,6 +1667,7 @@ void Window_RecreateSDL2Window()
     }
 
     Window_resized = 1;
+    Window_RestoreInputFocus();
     openjkdf2_trace("Window_RecreateSDL2Window: done");
 }
 

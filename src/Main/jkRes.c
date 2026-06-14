@@ -313,17 +313,25 @@ int jkRes_NewGob(jkResGobDirectory *gobFullpath, char *gobFolder, char *gobFname
     
     gobFullpath->numGobs = 0;
     stdString_snprintf(jkRes_idkGobPath, 0x80u, "%s%c%s", gobFolder, LEC_PATH_SEPARATOR_CHR, gobFname);
-    if (!util_FileExistsLowLevel(jkRes_idkGobPath) && Main_bMotsCompat) {
+    if ( !util_FileExistsLowLevel(jkRes_idkGobPath) )
+    {
         size_t pathLen = _strlen(jkRes_idkGobPath);
-        if (pathLen > 4 && !__strcmpi(jkRes_idkGobPath + pathLen - 4, ".goo")) {
-            char altPath[128];
+        char altPath[128];
+
+        if (pathLen > 4) {
             stdString_SafeStrCopy(altPath, jkRes_idkGobPath, sizeof(altPath));
-            altPath[pathLen - 1] = 'b';
-            if (util_FileExistsLowLevel(altPath))
-                stdString_SafeStrCopy(jkRes_idkGobPath, altPath, sizeof(jkRes_idkGobPath));
+            if (!__strcmpi(jkRes_idkGobPath + pathLen - 4, ".goo")) {
+                altPath[pathLen - 1] = 'b';
+                if (util_FileExistsLowLevel(altPath))
+                    stdString_SafeStrCopy(jkRes_idkGobPath, altPath, sizeof(jkRes_idkGobPath));
+            } else if (!__strcmpi(jkRes_idkGobPath + pathLen - 4, ".gob")) {
+                altPath[pathLen - 1] = 'o';
+                if (util_FileExistsLowLevel(altPath))
+                    stdString_SafeStrCopy(jkRes_idkGobPath, altPath, sizeof(jkRes_idkGobPath));
+            }
         }
     }
-    if ( util_FileExistsLowLevel(jkRes_idkGobPath) ) // Added: util_FileExists -> util_FileExistsLowLevel
+    if ( util_FileExistsLowLevel(jkRes_idkGobPath) )
     {
         if ( gobFullpath->numGobs < STDGOB_MAX_GOBS )
         {

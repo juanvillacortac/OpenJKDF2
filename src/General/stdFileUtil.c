@@ -342,8 +342,20 @@ static int parse_ext(const struct dirent *dir)
         }
         else 
         {
-            if(__strnicmp(ext, search_ext, 3) == 0)
+            size_t ext_len = strlen(search_ext);
+
+            if (ext_len > 0 && __strnicmp(ext, search_ext, ext_len) == 0) {
                 return 1;
+            }
+
+            if (ext_len >= 4) {
+                if (__strnicmp(search_ext, ".goo", 4) == 0 && __strnicmp(ext, ".gob", 4) == 0) {
+                    return 1;
+                }
+                if (__strnicmp(search_ext, ".gob", 4) == 0 && __strnicmp(ext, ".goo", 4) == 0) {
+                    return 1;
+                }
+            }
         }
     }
     else
@@ -405,6 +417,16 @@ int stdFileUtil_FindNext(stdFileSearch *a1, stdFileSearchResult *a2)
         if (tmp[strlen(tmp)-1] == '/') {
             tmp[strlen(tmp)-1] = 0;
         }
+
+#ifndef TARGET_TWL
+        {
+            char resolved[512];
+            if (casepath(tmp, resolved)) {
+                strncpy(tmp, resolved, sizeof(tmp) - 1);
+                tmp[sizeof(tmp) - 1] = 0;
+            }
+        }
+#endif
 
 #ifdef TARGET_TWL
         errno = 0;
@@ -487,6 +509,13 @@ int stdFileUtil_CountMatches(const char *path, int type, const char *extension)
 int stdFileUtil_DirExists(const char *path)
 {
     struct stat st;
+#if defined(PLATFORM_POSIX) && !defined(WIN32) && !defined(TARGET_TWL)
+    char resolved[512];
+
+    if (casepath(path, resolved)) {
+        return stat(resolved, &st) == 0 && S_ISDIR(st.st_mode);
+    }
+#endif
     return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
