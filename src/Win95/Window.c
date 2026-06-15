@@ -1441,7 +1441,18 @@ void Window_SdlUpdate()
 
 void Window_SdlVblank()
 {
+    static uint32_t ssaa_auto_last_swap_ms;
+
     if (Main_bHeadless) return;
+
+    {
+        uint32_t now_ms = SDL_GetTicks();
+        uint32_t frame_ms = now_ms - ssaa_auto_last_swap_ms;
+
+        if (jkGame_isDDraw && !jkCutscene_isRendering && !jkGuiBuildMulti_bRendering)
+            openjkdf2_SsaaAutoOnFrame(frame_ms);
+        ssaa_auto_last_swap_ms = now_ms;
+    }
 
     //static uint32_t roundtrip = 0;
     //uint32_t before = stdPlatform_GetTimeMsec();

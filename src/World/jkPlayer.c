@@ -295,6 +295,8 @@ void jkPlayer_ApplyHandheldDefaults(void)
     if (jkHudInv_font) {
         jkHudInv_LoadItemRes();
     }
+
+    openjkdf2_InitSsaaAuto();
 }
 
 void jkPlayer_ResetVars()
