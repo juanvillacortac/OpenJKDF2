@@ -9,6 +9,25 @@
 #include <errno.h>
 #include <unistd.h>
 
+static void casepath_norm_inplace(char *p)
+{
+    char *r = p;
+    char *w = p;
+
+    while (*r) {
+        char c = (*r == '\\') ? '/' : *r;
+        if (!(c == '/' && w > p && *(w - 1) == '/')) {
+            *w++ = c;
+        }
+        r++;
+    }
+    *w = '\0';
+
+    while (w > p && *(w - 1) == '/') {
+        *(--w) = '\0';
+    }
+}
+
 static FILE *fcaseopen_resolved(const char *path, const char *mode)
 {
     char *resolved = malloc(strlen(path) + 16);
@@ -65,91 +84,104 @@ static FILE *fcaseopen_try(const char *path, const char *mode)
     return NULL;
 }
 
-#if 0
-static int is_directory(const char *path) {
-   struct stat statbuf;
-   if (stat(path, &statbuf) != 0)
-       return 0;
-   return S_ISDIR(statbuf.st_mode);
-}
-#endif
-
-// r must have strlen(path) + 2 bytes
+// r must have strlen(path) + 16 bytes
 int casepath(char const *path, char *r)
 {
     size_t l = strlen(path);
-    char *p = alloca(l + 16);
-    strcpy(p, path);
-    size_t rl = 0;
-    
+    char *work;
+    int absolute;
     DIR *d;
-    if (p[0] == '/')
-    {
-        d = opendir("/");
-        p = p + 1;
+    size_t rl;
+    char *cursor;
+    char *comp;
+
+    if (!path || !r || l == 0) {
+        return 0;
     }
-    else
-    {
+
+    work = alloca(l + 2);
+    strcpy(work, path);
+    casepath_norm_inplace(work);
+    if (work[0] == '\0') {
+        return 0;
+    }
+
+    absolute = (work[0] == '/');
+    if (absolute) {
+        d = opendir("/");
+        r[0] = '\0';
+        rl = 0;
+        cursor = work + 1;
+    } else {
         d = opendir(".");
         r[0] = '.';
-        r[1] = 0;
+        r[1] = '\0';
         rl = 1;
+        cursor = work;
     }
-    
-    int last = 0;
-    char *c = strsep(&p, "/");
-    while (c)
-    {
-        if (!d)
-        {
+
+    if (!d) {
+        return 0;
+    }
+
+    comp = cursor;
+    while (comp && *comp) {
+        char *slash = strchr(comp, '/');
+        int is_last = (slash == NULL);
+        struct dirent *e;
+        struct dirent *match = NULL;
+
+        if (slash) {
+            *slash = '\0';
+        }
+
+        if (*comp == '\0') {
+            if (slash) {
+                comp = slash + 1;
+            } else {
+                comp = NULL;
+            }
+            continue;
+        }
+
+        if (!d) {
             return 0;
         }
-        
-        if (last)
-        {
-            closedir(d);
-            return 0;
-        }
-        
+
         r[rl] = '/';
         rl += 1;
-        r[rl] = 0;
-        
-        struct dirent *e = readdir(d);
-        while (e)
-        {
-            if (strcasecmp(c, e->d_name) == 0)
-            {
-                strcpy(r + rl, e->d_name);
-                rl += strlen(e->d_name);
+        r[rl] = '\0';
 
-                closedir(d);
-                d = opendir(r);
-                
+        for (e = readdir(d); e; e = readdir(d)) {
+            if (strcasecmp(comp, e->d_name) == 0) {
+                match = e;
                 break;
             }
-            
-            e = readdir(d);
         }
-        
-        if (!e)
-        {
-            strcpy(r + rl, c);
-            rl += strlen(c);
-            last = 1;
+        closedir(d);
+        d = NULL;
+
+        if (!match) {
+            return 0;
         }
 
-        c = strsep(&p, "/");
+        strcpy(r + rl, match->d_name);
+        rl += strlen(match->d_name);
+
+        if (!is_last) {
+            d = opendir(r);
+            if (!d) {
+                return 0;
+            }
+        }
+
+        comp = slash ? slash + 1 : NULL;
     }
 
-#if 0
-    // Added
-    if(is_directory(r)) {
-        strcat(r, "/");
+    if (d) {
+        closedir(d);
     }
-#endif
-    
-    if (d) closedir(d);
+
     return 1;
 }
 #endif

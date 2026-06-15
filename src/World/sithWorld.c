@@ -29,6 +29,7 @@
 #include "Cog/sithCog.h"
 #include "General/util.h"
 #include "Gameplay/sithPlayer.h"
+#include "Main/jkGame.h"
 #include "Platform/std3D.h"
 #if defined(TARGET_LINUX_GLES)
 #include "Platform/trace_gles.h"
@@ -149,10 +150,6 @@ int sithWorld_Load(sithWorld *pWorld, char *map_jkl_fname)
 #if defined(SDL2_RENDER) || defined(TARGET_TWL)
     std3D_PurgeEntireTextureCache();
 #endif
-#if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
-    if (openjkdf2_bIsLowMemoryPlatform)
-        rdMaterial_PurgeEntireMaterialCache();
-#endif
 
     if ( map_jkl_fname )
     {
@@ -164,6 +161,7 @@ int sithWorld_Load(sithWorld *pWorld, char *map_jkl_fname)
         _strncpy(pWorld->episodeName, sithWorld_episodeName, 0x1Fu);
         pWorld->episodeName[0x1F] = 0;
         sithWorld_pLoading = pWorld;
+        openjkdf2_SetWorldLoading(1);
         stdFnames_MakePath(v8, 128, "jkl", map_jkl_fname);
         sithWorld_some_integer_4 = 0;
         if ( !stdConffile_OpenRead(v8) )
@@ -232,10 +230,12 @@ LABEL_19:
 
     if ( sithWorld_NewEntry(pWorld) )
     {
-#ifdef SDL2_RENDER
-        std3D_UpdateSettings();
+#if defined(SDL2_RENDER)
+        if (!jkGame_isDDraw && std3D_IsReady())
+            std3D_UpdateSettings();
 #endif
         sithWorld_bLoaded = 1;
+        openjkdf2_SetWorldLoading(0);
         return 1;
     }
     stdPlatform_Printf("OpenJKDF2: sithWorld_NewEntry failed (out of memory?) for '%s'\n", v8);
@@ -250,6 +250,8 @@ parse_problem:
     stdPrintf(pSithHS->errorPrint, ".\\World\\sithWorld.c", 276, "Parse problem in file '%s'.\n", v8);
     goto cleanup;
 cleanup:
+    openjkdf2_SetWorldLoading(0);
+    sithWorld_pLoading = 0;
     sithWorld_FreeEntry(pWorld);
     return 0;
 }

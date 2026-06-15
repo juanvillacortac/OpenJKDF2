@@ -69,6 +69,60 @@ static int std3D_menuBufferDirty = 1;
 
 #if defined(TARGET_LINUX_GLES)
 static int std3D_menuTexIsRgba = 0;
+
+extern size_t std3D_loadedTexturesAmt;
+
+static int std3D_bPurgeTexturesOnEnd = 0;
+static uint32_t std3D_lastPurgeMs = 0;
+
+static void std3D_RequestDeferredTexturePurge(void)
+{
+    std3D_bPurgeTexturesOnEnd = 1;
+}
+
+static int std3D_GlesCheckUploadError(GLuint *tex, const char *what)
+{
+    GLenum err = glGetError();
+
+    if (err == GL_NO_ERROR)
+        return 1;
+
+    if (tex && *tex) {
+        glDeleteTextures(1, tex);
+        *tex = 0;
+    }
+    std3D_RequestDeferredTexturePurge();
+    openjkdf2_trace_fmt("std3D_AddToTextureCache: %s GL error 0x%x", what, err);
+    return 0;
+}
+
+static void std3D_RunDeferredTexturePurge(void)
+{
+    if (!std3D_bPurgeTexturesOnEnd)
+        return;
+    if (openjkdf2_IsWorldLoading())
+        return;
+    if (stdPlatform_GetTimeMsec() - std3D_lastPurgeMs <= 1000)
+        return;
+
+    std3D_PurgeEntireTextureCache();
+    std3D_bPurgeTexturesOnEnd = 0;
+    std3D_lastPurgeMs = stdPlatform_GetTimeMsec();
+}
+
+static int std3D_GlesRecoverTextureCacheSlots(void)
+{
+    if (std3D_loadedTexturesAmt < STD3D_MAX_TEXTURES)
+        return 1;
+
+#if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
+    if (rdMaterial_PurgeMaterialCache())
+        return std3D_loadedTexturesAmt < STD3D_MAX_TEXTURES;
+#endif
+
+    std3D_RequestDeferredTexturePurge();
+    return 0;
+}
 #endif
 
 static void std3D_uploadBuffer(GLuint buf, GLenum target, size_t size, const void *data, size_t *cap)
@@ -1283,6 +1337,10 @@ int std3D_EndScene()
     glDisableVertexAttribArray(attribute_v_uv);
     glDisableVertexAttribArray(attribute_v_color);
     glDisableVertexAttribArray(attribute_coord3d);
+
+#if defined(TARGET_LINUX_GLES)
+    std3D_RunDeferredTexturePurge();
+#endif
 
     //printf("End draw\n");
     last_tex = NULL;
@@ -3533,9 +3591,18 @@ static void* std3D_glesConvert16bppToRgba8(stdVBuffer *vbuf, uint32_t width, uin
 
 int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_alpha_tex, int no_alpha)
 {
+    int i;
+
     if (Main_bHeadless) return 1;
     if (!vbuf || !texture) return 1;
-    if (texture->texture_loaded) return 1;
+    if (texture->texture_loaded) {
+        for (i = 0; i < std3D_loadedTexturesAmt; i++) {
+            if (std3D_aLoadedSurfaces[i] == texture)
+                return 1;
+        }
+        texture->texture_loaded = 0;
+        texture->texture_id = 0;
+    }
 
 #if defined(TARGET_LINUX_GLES)
     if (!has_initted) {
@@ -3550,12 +3617,30 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
 
     if (std3D_loadedTexturesAmt >= STD3D_MAX_TEXTURES) {
         stdPlatform_Printf("ERROR: Texture cache exhausted!! Ask ShinyQuagsire to increase the size.\n");
+#if defined(TARGET_LINUX_GLES)
+        if (!std3D_GlesRecoverTextureCacheSlots()) {
+            return 0;
+        }
+#else
         return 1;
+#endif
     }
     //printf("Add to texture cache\n");
     
-    GLuint image_texture;
+    GLuint image_texture = 0;
     glGenTextures(1, &image_texture);
+#if defined(TARGET_LINUX_GLES)
+    if (!image_texture) {
+#if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
+        if (rdMaterial_PurgeMaterialCache())
+            glGenTextures(1, &image_texture);
+#endif
+        if (!image_texture) {
+            std3D_RequestDeferredTexturePurge();
+            return 0;
+        }
+    }
+#endif
     uint8_t* image_8bpp = stdDisplay_VBufferPixels(vbuf);
     uint16_t* image_16bpp = (uint16_t*)image_8bpp;
     uint8_t* pal = (uint8_t*)vbuf->palette;
@@ -3608,9 +3693,18 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
             if (!use_native) {
                 image_data = std3D_glesConvert16bppToRgba8(vbuf, width, height, image_16bpp);
                 if (!image_data) {
+#if defined(TARGET_LINUX_GLES)
+                    std3D_RequestDeferredTexturePurge();
+#endif
                     return 0;
                 }
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+#if defined(TARGET_LINUX_GLES)
+                if (!std3D_GlesCheckUploadError(&image_texture, "16bpp rgba upload")) {
+                    free(image_data);
+                    return 0;
+                }
+#endif
             }
 
             texture->pDataDepthConverted = image_data;
@@ -3731,6 +3825,11 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
 #endif
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, image_8bpp);
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#if defined(TARGET_LINUX_GLES)
+        if (!std3D_GlesCheckUploadError(&image_texture, "8bpp upload")) {
+            return 0;
+        }
+#endif
 
         texture->pDataDepthConverted = NULL;
     }
@@ -3794,7 +3893,17 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
     int cacheIdx = std3D_GetBitmapCacheIdx();
     if (cacheIdx < 0) {
         stdPlatform_Printf("ERROR: Texture cache exhausted!! Ask ShinyQuagsire to increase the size.\n");
+#if defined(TARGET_LINUX_GLES)
+        if (!std3D_GlesRecoverTextureCacheSlots()) {
+            return 0;
+        }
+        cacheIdx = std3D_GetBitmapCacheIdx();
+        if (cacheIdx < 0) {
+            return 0;
+        }
+#else
         return 1;
+#endif
     }
     //printf("Add to texture cache\n");
     
@@ -3843,9 +3952,18 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
         {
             void* image_data = std3D_glesConvert16bppToRgba8(vbuf, width, height, image_16bpp);
             if (!image_data) {
+#if defined(TARGET_LINUX_GLES)
+                std3D_RequestDeferredTexturePurge();
+#endif
                 return 0;
             }
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+#if defined(TARGET_LINUX_GLES)
+            if (!std3D_GlesCheckUploadError(&image_texture, "bitmap rgba upload")) {
+                free(image_data);
+                return 0;
+            }
+#endif
             texture->paDataDepthConverted[mipIdx] = image_data;
         }
 #else
@@ -4039,6 +4157,10 @@ void std3D_AddTextureToCacheList(rdDDrawSurface *surface) {
 // Added helpers
 void std3D_UpdateSettings()
 {
+#if defined(TARGET_LINUX_GLES)
+    if (!std3D_IsReady() || !std3D_EnsureGLContext())
+        return;
+#endif
     jk_printf("Updating texture cache...\n");
     for (int i = 0; i < STD3D_MAX_TEXTURES; i++)
     {
@@ -4380,4 +4502,37 @@ int std3D_CreateExecuteBuffer()
 int std3D_IsReady()
 {
     return has_initted;
+}
+
+void std3D_WarmupPipeline(int frames)
+{
+#if defined(SDL2_RENDER) || defined(TARGET_LINUX_GLES)
+    int i;
+    int saved_ddraw;
+
+    if (Main_bHeadless || frames <= 0)
+        return;
+    if (openjkdf2_IsWorldLoading())
+        return;
+    if (!std3D_EnsureGLContext())
+        return;
+
+    saved_ddraw = jkGame_isDDraw;
+    jkGame_isDDraw = 1;
+
+    for (i = 0; i < frames; i++) {
+        if (!std3D_StartScene())
+            break;
+        std3D_DrawSceneFbo();
+        std3D_EndScene();
+#if defined(TARGET_LINUX_GLES)
+        if (displayWindow)
+            SDL_GL_SwapWindow(displayWindow);
+#endif
+        glFinish();
+    }
+
+    jkGame_isDDraw = saved_ddraw;
+    fprintf(stderr, "OpenJKDF2: GLES warmup (%d frame%s)\n", i, i == 1 ? "" : "s");
+#endif
 }

@@ -19,7 +19,7 @@
 #include "nfd.h"
 #endif // defined(SDL2_RENDER)
 
-#ifdef LINUX
+#if defined(PLATFORM_POSIX)
 #include "external/fcaseopen/fcaseopen.h"
 #endif
 

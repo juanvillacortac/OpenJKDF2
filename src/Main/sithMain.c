@@ -28,6 +28,7 @@
 #include "World/sithMaterial.h"
 #include "World/sithTemplate.h"
 #include "World/sithModel.h"
+#include "Platform/handheld.h"
 #include "World/sithSurface.h"
 #include "Devices/sithSound.h"
 #include "Devices/sithSoundMixer.h"
@@ -167,6 +168,7 @@ int sithMain_Mode1Init(char *a1)
     sithMain_Open();
     sithTime_Startup();
     g_sithMode = 1;
+    openjkdf2_OnLevelLoadComplete();
     return 1;
 }
 
@@ -180,6 +182,7 @@ int sithMain_OpenNormal(char *path)
     sithWorld_Initialize();
     sithMain_Open();
     g_sithMode = 1;
+    openjkdf2_OnLevelLoadComplete();
     return 1;
 }
 
@@ -192,6 +195,7 @@ int sithMain_Mode1Init_3(char *fpath)
     sithTime_Startup();
     sithMulti_Startup();
     g_sithMode = 1;
+    openjkdf2_OnLevelLoadComplete();
     return 1;
 }
 

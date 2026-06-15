@@ -23,7 +23,10 @@
 #include "General/stdString.h"
 
 #include "stdPlatform.h"
+#include "Platform/handheld.h"
 #include "jk.h"
+
+extern int jkGuiBuildMulti_bRendering;
 
 #if defined(TARGET_TWL)
 #include <nds.h>
@@ -254,8 +257,21 @@ int jkGame_Update()
         {
             v4 = (flex_d_t)(Video_dword_5528A0 - Video_dword_5528A4) * 1000.0 / (flex_d_t)(unsigned int)(Video_dword_5528A8 - Video_lastTimeMsec);
             Video_flt_55289C = v4;
-            _sprintf(std_genBuffer, "%02.3f", v4);
-            jkDev_sub_41FC40(100, std_genBuffer);
+            {
+                long rss_kb = openjkdf2_GetProcessRssKb();
+                if (rss_kb > 0) {
+                    double rss_mb = (double)rss_kb / 1024.0;
+                    if (openjkdf2_IsSsaaAutoActive())
+                        _sprintf(std_genBuffer, "%.1f fps  ssaa %.2f  %.0f MB", (double)v4, (double)jkPlayer_ssaaMultiple, rss_mb);
+                    else
+                        _sprintf(std_genBuffer, "%.1f fps  %.0f MB", (double)v4, rss_mb);
+                } else if (openjkdf2_IsSsaaAutoActive()) {
+                    _sprintf(std_genBuffer, "%.1f fps  ssaa %.2f", (double)v4, (double)jkPlayer_ssaaMultiple);
+                } else {
+                    _sprintf(std_genBuffer, "%.1f fps", (double)v4);
+                }
+            }
+            openjkdf2_SetFpsHudText(std_genBuffer);
             Video_lastTimeMsec = Video_dword_5528A8;
             Video_dword_5528A4 = Video_dword_5528A0;
         }
@@ -311,8 +327,22 @@ int jkGame_Update()
 
 #if defined(SDL2_RENDER) || defined(TARGET_TWL)
     std3D_DrawMenu();
+    openjkdf2_DrawFpsHud();
     rdFinishFrame();
 #endif
+
+    {
+        static uint32_t ssaa_auto_last_frame_ms;
+        uint32_t now_ms = stdPlatform_GetTimeMsec();
+
+        if (jkGame_isDDraw && !jkCutscene_isRendering && !jkGuiBuildMulti_bRendering) {
+            if (ssaa_auto_last_frame_ms != 0) {
+                uint32_t frame_ms = now_ms - ssaa_auto_last_frame_ms;
+                openjkdf2_SsaaAutoOnFrame(frame_ms);
+            }
+        }
+        ssaa_auto_last_frame_ms = now_ms;
+    }
 
     // MOTS removed
     if ( Video_modeStruct.b3DAccel )

@@ -526,7 +526,7 @@ void stdFileUtil_RmDir(const char *path)
 
 // https://stackoverflow.com/questions/2336242/recursive-mkdir-system-call-on-unix
 static void _mkdir(const char *dir, int perms) {
-    char tmp[256];
+    char tmp[512];
     char *p = NULL;
     size_t len;
 
@@ -559,6 +559,10 @@ int stdFileUtil_MkDir(char* path)
         if (tmp[i] == '\\') {
             tmp[i] = '/';
         }
+    }
+
+    if (stdFileUtil_DirExists(tmp)) {
+        return 1;
     }
 #endif
 

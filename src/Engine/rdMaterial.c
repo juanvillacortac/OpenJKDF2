@@ -14,6 +14,7 @@
 #endif
 #if defined(TARGET_LINUX_GLES)
 #include "Platform/trace_gles.h"
+#include "Platform/handheld.h"
 #endif
 
 #ifdef TARGET_TWL
@@ -706,6 +707,7 @@ int rdMaterial_EnsureData(rdMaterial* pMaterial) {
     }
 #if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
     if (pMaterial->bDataLoaded) {
+        rdMaterial_UpdateFrameCount(pMaterial);
         return 1;
     }
 
@@ -742,11 +744,21 @@ int rdMaterial_EnsureDataForced(rdMaterial* pMaterial) {
         return 0;
     }
 #if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
-    // Only allow trying to load data once per frame
     if (!pMaterial->bDataLoaded) {
         if (!rdMaterial_LoadEntry_Deferred(pMaterial, 1, 1, 0)) {
-            rdMaterial_PurgeEntireMaterialCache();
+            rdMaterial_PurgeMaterialCache();
             rdMaterial_LoadEntry_Deferred(pMaterial, 1, 1, 0);
+#if defined(TARGET_LINUX_GLES)
+            if (!pMaterial->bDataLoaded && !openjkdf2_IsWorldLoading()) {
+                rdMaterial_PurgeEntireMaterialCache();
+                rdMaterial_LoadEntry_Deferred(pMaterial, 1, 1, 0);
+            }
+#else
+            if (!pMaterial->bDataLoaded) {
+                rdMaterial_PurgeEntireMaterialCache();
+                rdMaterial_LoadEntry_Deferred(pMaterial, 1, 1, 0);
+            }
+#endif
         }
     }
 #endif
@@ -852,14 +864,41 @@ int rdMaterial_AddToTextureCache(rdMaterial *pMaterial, rdTexture *texture, int 
 }
 
 // TODO verify behavior in here
+static void rdMaterial_InvalidateGpuSurfaces(rdMaterial *pMaterial)
+{
+    size_t i;
+    size_t j;
+
+    if (!pMaterial || !pMaterial->textures)
+        return;
+
+    for (i = 0; i < pMaterial->num_textures; i++)
+    {
+        rdTexture *pTex = &pMaterial->textures[i];
+
+        for (j = 0; j < pTex->num_mipmaps; j++)
+        {
+#if defined(SDL2_RENDER) || defined(TARGET_TWL)
+            std3D_PurgeSurfaceRefs(&pTex->alphaMats[j]);
+            std3D_PurgeSurfaceRefs(&pTex->opaqueMats[j]);
+#endif
+            pTex->alphaMats[j].texture_loaded = 0;
+            pTex->alphaMats[j].texture_id = 0;
+            pTex->alphaMats[j].frameNum = 0;
+            pTex->opaqueMats[j].texture_loaded = 0;
+            pTex->opaqueMats[j].texture_id = 0;
+            pTex->opaqueMats[j].frameNum = 0;
+        }
+    }
+}
+
 void rdMaterial_ResetCacheInfo(rdMaterial *pMaterial)
 {
-    // Added
     if (!pMaterial) {
         return;
     }
-    
-    //printf("Evicting material %s\n", pMaterial->mat_full_fpath);
+
+#ifndef RDMATERIAL_LRU_LOAD_UNLOAD
 #ifndef SDL2_RENDER
     for (int i = 0; i < pMaterial->num_textures; i++)
     {
@@ -869,10 +908,6 @@ void rdMaterial_ResetCacheInfo(rdMaterial *pMaterial)
         rdTexture* texIter = &pMaterial->textures[i];
         for (int j = 0; j < texIter->num_mipmaps; j++)
         {
-#if defined(SDL2_RENDER) || defined(TARGET_TWL)
-            std3D_PurgeSurfaceRefs(&texIter->alphaMats[j]);
-            std3D_PurgeSurfaceRefs(&texIter->opaqueMats[j]);
-#endif
             texIter->alphaMats[j].texture_id = 0;
             texIter->alphaMats[j].texture_loaded = 0;
             texIter->alphaMats[j].frameNum = 0;
@@ -882,8 +917,10 @@ void rdMaterial_ResetCacheInfo(rdMaterial *pMaterial)
         }
     }
 #endif
+#endif
 
 #if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
+    rdMaterial_InvalidateGpuSurfaces(pMaterial);
     rdMaterial_EvictData(pMaterial);
     rdMaterial_RemoveMaterialFromCacheList(pMaterial);
 #endif
@@ -893,14 +930,19 @@ void rdMaterial_ResetCacheInfo(rdMaterial *pMaterial)
 
 void rdMaterial_EvictData(rdMaterial *pMaterial)
 {
+    size_t i;
+
     if (!pMaterial) {
         return;
     }
+
+    rdMaterial_InvalidateGpuSurfaces(pMaterial);
+
     if (!pMaterial->bDataLoaded) {
         return;
     }
 
-    for (size_t i = 0; i < pMaterial->num_textures; i++)
+    for (i = 0; i < pMaterial->num_textures; i++)
     {
         if (!pMaterial->textures) break;
 
@@ -908,16 +950,7 @@ void rdMaterial_EvictData(rdMaterial *pMaterial)
 
         for (size_t j = 0; j < pTex->num_mipmaps; j++)
         {
-            rdDDrawSurface* matIter = &pTex->alphaMats[j];
-            std3D_PurgeSurfaceRefs(matIter);
-            std3D_PurgeSurfaceRefs(&matIter[4]);
-            matIter->texture_loaded = 0;
-            matIter->frameNum = 0;
-            matIter[4].texture_loaded = 0;
-            matIter[4].frameNum = 0;
-
             if (pTex->texture_struct[j]) {
-                printf("Evicting material %s fr %d\n", pMaterial->mat_full_fpath, rdMaterial_numCachedMaterials);
                 stdDisplay_VBufferFree(pTex->texture_struct[j]);
                 pTex->texture_struct[j] = NULL;
             }
@@ -1044,14 +1077,26 @@ void rdMaterial_AddMaterialToCacheList(rdMaterial *pMaterial) {
 
 int rdMaterial_PurgeMaterialCache()
 {
-    //printf("Purge mat... %d\n", rdMaterial_numCachedMaterials);
-
-    // TODO: maybe be gentler here and have like, a 60 frame buffer
-
     int purgedAnything = 0;
-    int purgeLimit = openjkdf2_bIsLowMemoryPlatform ? 60 : 240;
-    int purgeStep = openjkdf2_bIsLowMemoryPlatform ? 10 : 20;
+    int aggressive = openjkdf2_bIsLowMemoryPlatform != 0;
+    int purgeLimit;
+    int purgeStep;
+    int32_t frameAge;
     rdMaterial* pNextCachedMaterial = NULL;
+
+#if defined(TARGET_LINUX_GLES)
+    int handheld;
+
+    if (openjkdf2_IsWorldLoading())
+        return 0;
+    handheld = !aggressive && openjkdf2_IsHandheld();
+    purgeLimit = aggressive ? 40 : (handheld ? 120 : 240);
+    purgeStep = aggressive ? 8 : (handheld ? 12 : 20);
+#else
+    purgeLimit = aggressive ? 40 : 240;
+    purgeStep = aggressive ? 8 : 20;
+#endif
+
     while (!purgedAnything) {
         for ( rdMaterial* pCacheMaterial = rdMaterial_pFirstMatCache; pCacheMaterial; pCacheMaterial = pNextCachedMaterial )
         {
@@ -1061,13 +1106,11 @@ int rdMaterial_PurgeMaterialCache()
                 break;
             }
 
-            // On DSi, we can't purge the current frame nor the previous, because the previous is being rastered constantly by the hardware
-            if (pCacheMaterial->frameNum-std3D_frameCount > purgeLimit)
+            frameAge = (int32_t)(std3D_frameCount - pCacheMaterial->frameNum);
+            if (frameAge > purgeLimit)
             {
                 purgedAnything = 1;
-                
                 rdMaterial_ResetCacheInfo(pCacheMaterial);
-                //std3D_PurgeSurfaceRefs(pCacheMaterial);
             }
             else {
                 break;
@@ -1091,17 +1134,25 @@ int rdMaterial_PurgeMaterialCache()
 int rdMaterial_PurgeEntireMaterialCache()
 {
     int res = 0;
-
-    // HACK but whatever lol
     int prev_std3D_frameCount = std3D_frameCount;
+
+#if defined(TARGET_LINUX_GLES)
+    if (openjkdf2_IsWorldLoading())
+        return 0;
+#endif
+
     std3D_frameCount = 0;
-    res = rdMaterial_PurgeMaterialCache();
+
+    while (rdMaterial_pFirstMatCache) {
+        rdMaterial_ResetCacheInfo(rdMaterial_pFirstMatCache);
+        res = 1;
+    }
+
     std3D_frameCount = prev_std3D_frameCount;
 
     rdMaterial_numCachedMaterials = 0;
-    rdMaterial_pLastMatCache          = NULL;
-    rdMaterial_pFirstMatCache         = NULL;
-        
+    rdMaterial_pLastMatCache = NULL;
+    rdMaterial_pFirstMatCache = NULL;
 
     return res;
 }

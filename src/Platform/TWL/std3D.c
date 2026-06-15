@@ -2194,6 +2194,7 @@ void std3D_PurgeEntireTextureCache()
 }
 
 void std3D_UpdateSettings() {}
+void std3D_WarmupPipeline(int frames) { (void)frames; }
 void std3D_Screenshot(const char* pFpath) {}
 
 void std3D_ResetUIRenderList() {}

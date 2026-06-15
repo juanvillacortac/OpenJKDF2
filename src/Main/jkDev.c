@@ -26,6 +26,7 @@
 #include "Dss/sithGamesave.h"
 #include "Dss/jkDSS.h"
 #include "../jk.h"
+#include "Platform/handheld.h"
 
 
 void jkDev_DrawEntriesGPU();
@@ -122,6 +123,7 @@ void jkDev_Startup()
 #ifdef QOL_IMPROVEMENTS
     jkDev_RegisterCmd(jkDev_CmdNoclip, "noclip", "Noclip", 0);
 	jkDev_RegisterCmd(jkDev_Custom_CmdJumpNextCheckpoint, "checkmate", "", 0);  // cycles to next auto-restart checkpoint
+    jkDev_RegisterCmd(jkDev_CmdFramerate, "fpsview", "FPS counter", 0);
 #endif
 
     jkDev_bInitted = 1;
@@ -593,6 +595,10 @@ int jkDev_CmdVersion(stdDebugConsoleCmd *pCmd, const char *pArgStr)
 int jkDev_CmdFramerate(stdDebugConsoleCmd *pCmd, const char *pArgStr)
 {
     Main_bFrameRate = !Main_bFrameRate;
+    if (!Main_bFrameRate) {
+        jkDev_sub_41FC90(100);
+        openjkdf2_ClearFpsHud();
+    }
     return 1;
 }
 

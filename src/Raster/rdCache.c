@@ -408,8 +408,8 @@ int rdCache_SendFaceListToHardware()
         }
         else {
             rdMaterial_EnsureData(v11.material);
-#ifdef TARGET_TWL
-            // Added: fall back to colors with no data
+#if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
+            /* Fall back to flat color when texture data could not be loaded (OOM). */
             if (!v11.material->bDataLoaded) {
                 v11.mipmap_related = 3;
                 mipmap_related = 3;
@@ -502,7 +502,7 @@ int rdCache_SendFaceListToHardware()
             }
 
             // Look for the closest mipmap that's been loaded
-#ifdef TARGET_TWL
+#if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
             int mipmap_level_orig = mipmap_level;
             stdVBuffer* mipmap = sith_tex_sel->texture_struct[mipmap_level];
 

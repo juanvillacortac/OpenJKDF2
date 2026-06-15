@@ -274,7 +274,7 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
 
         stdFileUtil_MkDir(fname);
         if (bChdir) {
-            chdir(fname);
+            casechdir(fname);
             stdPlatform_Printf("Using %s, root directory: %s\n", INSTALL_OVERRIDE_ENVVAR_NAME, fname);
         }
         bIsOverride = 1;
@@ -307,7 +307,7 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
         if(util_FileExists(fname_tmp)) {
             stdFileUtil_MkDir(fname);
             if (bChdir) {
-                chdir(fname);
+                casechdir(fname);
                 stdPlatform_Printf("Using XDG root directory: %s\n", fname);
             }
         }
@@ -318,7 +318,7 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
             stdFileUtil_MkDir(fname);
 
             if (bChdir) {
-                chdir(fname);
+                casechdir(fname);
                 stdPlatform_Printf("Using new XDG root directory: %s\n", fname);
             }
         }
@@ -340,7 +340,7 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
             if(util_FileExists(fname_tmp)) {
                 stdFileUtil_MkDir(fname);
                 if (bChdir) {
-                    chdir(fname);
+                    casechdir(fname);
                     stdPlatform_Printf("Using root directory: %s\n", fname);
                 }
                 bFound = 1;
@@ -353,7 +353,7 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
                 strncpy(fname, data_home, sizeof(fname));
                 stdFileUtil_MkDir(fname);
                 if (bChdir) {
-                    chdir(fname);
+                    casechdir(fname);
                     stdPlatform_Printf("Using SDL_GetPrefPath: %s\n", fname);
                 }
                 SDL_free(data_home);
@@ -368,7 +368,7 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
         strcpy(fname, homedir);
         stdFileUtil_MkDir(fname);
         if (bChdir) {
-            chdir(fname);
+            casechdir(fname);
             stdPlatform_Printf("Using %s, root directory: %s\n", INSTALL_OVERRIDE_ENVVAR_NAME, fname);
         }
     }
@@ -389,7 +389,7 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
         if(util_FileExists(fname_tmp)) {
             stdFileUtil_MkDir(fname);
             if (bChdir) {
-                chdir(fname);
+                casechdir(fname);
                 stdPlatform_Printf("Using root directory: %s\n", fname);
             }
             bFound = 1;
@@ -401,7 +401,7 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
                 strncpy(fname, data_home, sizeof(fname));
                 stdFileUtil_MkDir(fname);
                 if (bChdir) {
-                    chdir(fname);
+                    casechdir(fname);
                     stdPlatform_Printf("Using SDL_GetPrefPath: %s\n", fname);
                 }
                 SDL_free(data_home);
@@ -1076,14 +1076,17 @@ void InstallHelper_SetCwd()
 #endif
 
     int found_override = 0;
-    
+    int has_env_root = 0;
+
     char data_home[256];
-    found_override = InstallHelper_GetLocalDataDir(data_home, sizeof(data_home), 0);
+    has_env_root = InstallHelper_GetLocalDataDir(data_home, sizeof(data_home), 0);
 
     stdFnames_MakePath(fname, 256, data_home, "resource/jk_.cd");
 
-    // If ~/.local/share/openjkdf2/resource/jk_cd exists, use that directory as resource root
-    if(openjkdf2_bSkipWorkingDirData || (util_FileExists(fname) && !util_FileExists("resource/jk_.cd"))) {
+    /* OPENJKDF2_ROOT / OPENJKMOTS_ROOT must always chdir (see GetLocalDataDir docs).
+     * The jk_.cd probe is only for legacy XDG installs without an env override. */
+    if (openjkdf2_bSkipWorkingDirData || has_env_root
+        || (util_FileExists(fname) && !util_FileExists("resource/jk_.cd"))) {
         InstallHelper_UseLocalData();
         found_override = 1;
     }

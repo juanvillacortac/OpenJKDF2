@@ -250,15 +250,17 @@ void jkPlayer_ApplyHandheldDefaults(void)
     jkPlayer_bEnableJkgm = 0;
     jkPlayer_bEnableTexturePrecache = 0;
 
-    if (ssaa_env && ssaa_env[0]) {
-        float v = (float)atof(ssaa_env);
-        if (v >= 0.25f && v <= 1.0f) {
-            jkPlayer_ssaaMultiple = v;
+    if (!openjkdf2_IsSsaaAutoActive()) {
+        if (ssaa_env && ssaa_env[0]) {
+            float v = (float)atof(ssaa_env);
+            if (v >= 0.25f && v <= 1.0f) {
+                jkPlayer_ssaaMultiple = v;
+            }
+        } else if (Window_ySize > 0 && Window_ySize <= 480 && jkPlayer_ssaaMultiple > 0.5f) {
+            jkPlayer_ssaaMultiple = 0.5f;
+        } else if (jkPlayer_ssaaMultiple > 0.75f) {
+            jkPlayer_ssaaMultiple = 0.75f;
         }
-    } else if (Window_ySize > 0 && Window_ySize <= 480 && jkPlayer_ssaaMultiple > 0.5f) {
-        jkPlayer_ssaaMultiple = 0.5f;
-    } else if (jkPlayer_ssaaMultiple > 0.75f) {
-        jkPlayer_ssaaMultiple = 0.75f;
     }
 
     if (!getenv("OPENJKDF2_VSYNC")) {
@@ -287,13 +289,9 @@ void jkPlayer_ApplyHandheldDefaults(void)
         }
     }
 
-    if (jkHud_bOpened) {
+    if (jkHud_bOpened && !openjkdf2_IsWorldLoading() && jkMain_bInit) {
         jkHud_Close();
         jkHud_Open();
-    }
-
-    if (jkHudInv_font) {
-        jkHudInv_LoadItemRes();
     }
 
     openjkdf2_InitSsaaAuto();
@@ -672,7 +670,8 @@ void jkPlayer_WriteConf(wchar_t *name)
         stdJSON_SaveInt(ext_fpath, "fpslimit", jkPlayer_fpslimit);
         stdJSON_SaveBool(ext_fpath, "enablevsync", jkPlayer_enableVsync);
         stdJSON_SaveBool(ext_fpath, "enablebloom", jkPlayer_enableBloom);
-        stdJSON_SaveFloat(ext_fpath, "ssaamultiple", jkPlayer_ssaaMultiple);
+        if (!openjkdf2_IsSsaaAutoActive())
+            stdJSON_SaveFloat(ext_fpath, "ssaamultiple", jkPlayer_ssaaMultiple);
         stdJSON_SaveInt(ext_fpath, "enablessao", jkPlayer_enableSSAO);
         stdJSON_SaveFloat(ext_fpath, "gamma", jkPlayer_gamma);
         stdJSON_SaveBool(ext_fpath, "bEnableJkgm", jkPlayer_bEnableJkgm);
@@ -767,10 +766,12 @@ void jkPlayer_ParseLegacyExt()
 
     if (stdConffile_ReadLine())
     {
-        if (_sscanf(stdConffile_aLine, "ssaamultiple %f", &ftmp) != 1)
-            jkPlayer_ssaaMultiple = 1.0;
-        else
-            jkPlayer_ssaaMultiple = ftmp;
+        if (!openjkdf2_IsSsaaAutoActive()) {
+            if (_sscanf(stdConffile_aLine, "ssaamultiple %f", &ftmp) != 1)
+                jkPlayer_ssaaMultiple = 1.0;
+            else
+                jkPlayer_ssaaMultiple = ftmp;
+        }
     }
 
     if (stdConffile_ReadLine())
@@ -866,7 +867,8 @@ int jkPlayer_ReadConf(wchar_t *name)
         jkPlayer_fpslimit = stdJSON_GetInt(ext_fpath, "fpslimit", jkPlayer_fpslimit);
         jkPlayer_enableVsync = stdJSON_GetBool(ext_fpath, "enablevsync", jkPlayer_enableVsync);
         jkPlayer_enableBloom = stdJSON_GetBool(ext_fpath, "enablebloom", jkPlayer_enableBloom);
-        jkPlayer_ssaaMultiple = stdJSON_GetFloat(ext_fpath, "ssaamultiple", jkPlayer_ssaaMultiple);
+        if (!openjkdf2_IsSsaaAutoActive())
+            jkPlayer_ssaaMultiple = stdJSON_GetFloat(ext_fpath, "ssaamultiple", jkPlayer_ssaaMultiple);
         jkPlayer_enableSSAO = stdJSON_GetInt(ext_fpath, "enablessao", jkPlayer_enableSSAO);
         jkPlayer_gamma = stdJSON_GetFloat(ext_fpath, "gamma", jkPlayer_gamma);
 
@@ -901,8 +903,12 @@ int jkPlayer_ReadConf(wchar_t *name)
         Window_SetHiDpi(Window_isHiDpi_tmp);
         Window_SetFullscreen(Window_isFullscreen_tmp);
 
-        jkPlayer_ApplyHandheldDefaults();
-        std3D_UpdateSettings();
+        if (!openjkdf2_IsWorldLoading()) {
+            jkPlayer_ApplyHandheldDefaults();
+            openjkdf2_SsaaAutoOnSettingsLoaded();
+            if (!jkGame_isDDraw && std3D_IsReady())
+                std3D_UpdateSettings();
+        }
 
         jkPlayer_bHasLoadedSettingsOnce = 1;
 #endif

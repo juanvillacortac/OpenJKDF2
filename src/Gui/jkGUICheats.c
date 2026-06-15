@@ -80,6 +80,7 @@ static void jkGuiCheats_PopulateEntries(Darray *pListDisplayed, jkGuiElement *el
         jkGuiCheats_AddEntry(pListDisplayed, "iamagod", "Uber Jedi");
         jkGuiCheats_AddEntry(pListDisplayed, "noclip", "Noclip");
         jkGuiCheats_AddEntry(pListDisplayed, "checkmate", "Next checkpoint");
+        jkGuiCheats_AddEntry(pListDisplayed, "fpsview", "Toggle FPS");
         jkGuiCheats_AddEntry(pListDisplayed, "gameover", "End level");
     } else {
         jkGuiCheats_AddEntry(pListDisplayed, "bactame", "Heal");
@@ -90,6 +91,7 @@ static void jkGuiCheats_PopulateEntries(Darray *pListDisplayed, jkGuiElement *el
         jkGuiCheats_AddEntry(pListDisplayed, "raccoonking", "Uber Jedi");
         jkGuiCheats_AddEntry(pListDisplayed, "noclip", "Noclip");
         jkGuiCheats_AddEntry(pListDisplayed, "checkmate", "Next checkpoint");
+        jkGuiCheats_AddEntry(pListDisplayed, "fpsview", "Toggle FPS");
         jkGuiCheats_AddEntry(pListDisplayed, "thereisnotry", "End level");
     }
 

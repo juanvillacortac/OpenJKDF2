@@ -1,6 +1,7 @@
 #include "stdFnames.h"
 
 #include "jk.h"
+#include "General/stdString.h"
 
 #ifdef FS_POSIX
 #include "external/fcaseopen/fcaseopen.h"
@@ -214,10 +215,43 @@ char* stdFnames_Concat(char *a1, char *a2, int a3)
   return a1;
 }
 
+static void stdFnames_NormalizeSlashes(char *path)
+{
+    for (int i = 0; path[i]; i++) {
+        if (path[i] == '\\') {
+            path[i] = '/';
+        }
+    }
+}
+
+static void stdFnames_ApplyCasepath(char *a1, int a2)
+{
+    char *r = (char*)malloc(strlen(a1) + 16);
+
+    if (!r) {
+        return;
+    }
+
+    stdFnames_NormalizeSlashes(a1);
+    if (casepath(a1, r)) {
+        if (r[0] == '.' && (r[1] == '/' || r[1] == '\\')) {
+            stdString_SafeStrCopy(a1, r + 2, a2);
+        } else {
+            stdString_SafeStrCopy(a1, r, a2);
+        }
+    }
+    free(r);
+}
+
 char* stdFnames_MakePath(char *a1, int a2, const char *a3, const char *a4)
 {
     int v4; // ecx
     unsigned int v5; // kr04_4
+    int has_wildcard = 0;
+
+    if (a4) {
+        has_wildcard = !!strchr(a4, '*') || !!strchr(a4, '?');
+    }
 
     _strncpy(a1, a3, a2 - 1);
     a1[a2 - 1] = 0;
@@ -231,21 +265,20 @@ char* stdFnames_MakePath(char *a1, int a2, const char *a3, const char *a4)
     }
 
 #ifdef FS_POSIX
-    char *r = (char*)malloc(strlen(a1) + 16);
-    if (casepath(a1, r))
-    {
-        if (r[0] == '.' && (r[1] == '/' || r[1] == '\\')) {
-            strcpy(a1, r+2);
-        }
-        else {
-            strcpy(a1, r);
-        }
-        strcat(a1, "/"); // Added?
+    if (*a1) {
+        stdFnames_ApplyCasepath(a1, a2);
+        v4 = _strlen(a1);
     }
-    free(r);
 #endif
 
     _strncat(a1, a4, a2 - v4 - 1);
+
+#ifdef FS_POSIX
+    if (a4 && *a4 && !has_wildcard) {
+        stdFnames_ApplyCasepath(a1, a2);
+    }
+#endif
+
     return a1;
 }
 
