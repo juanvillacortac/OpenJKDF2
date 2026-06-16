@@ -10,6 +10,14 @@ macro(plat_initialize)
 
     include(cmake_modules/plat_feat_full_sdl2.cmake)
 
+    if(DEFINED ENV{OPENJKDF2_PORTMASTER_BUILD})
+        message(STATUS "PortMaster x86_64: no GNS/curl/physfs (system OpenAL/SDL)")
+        set(TARGET_USE_PHYSFS FALSE)
+        set(TARGET_USE_CURL FALSE)
+        set(TARGET_USE_GAMENETWORKINGSOCKETS FALSE)
+        add_link_options(-static-libstdc++ -static-libgcc -Wl,-rpath,'$ORIGIN/libs.x86_64' -pthread)
+    endif()
+
     set(TARGET_LINUX TRUE)
 
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -std=c11 -fshort-wchar -fno-builtin-wcslen -fno-builtin-wcslen -Werror=implicit-function-declaration -Wno-unused-variable -Wno-parentheses -Wno-incompatible-pointer-types")

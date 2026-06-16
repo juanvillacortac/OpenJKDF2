@@ -81,6 +81,11 @@ static void (*stdDisplay_RestoreDisplayMode)() = (void*)stdDisplay_RestoreDispla
 static stdVBuffer* (*stdDisplay_VBufferConvertColorFormat)(void* a, stdVBuffer* b) = (void*)stdDisplay_VBufferConvertColorFormat_ADDR;
 static int (*stdDisplay_GammaCorrect3)(int a1) = (void*)stdDisplay_GammaCorrect3_ADDR;
 #else
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern uint32_t Video_menuTexId;
 
 int stdDisplay_Startup();
@@ -116,6 +121,11 @@ int stdDisplay_ResizeOverlayMapBuffer(uint32_t w, uint32_t h);
 int stdDisplay_SetCooperativeLevel(uint32_t a);
 int stdDisplay_DrawAndFlipGdi(uint32_t a);
 void stdDisplay_422A50();
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
 
 #endif // _STDDISPLAY_H

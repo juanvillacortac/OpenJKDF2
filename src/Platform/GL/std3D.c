@@ -4506,7 +4506,7 @@ int std3D_IsReady()
 
 void std3D_WarmupPipeline(int frames)
 {
-#if defined(SDL2_RENDER) || defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES)
     int i;
     int saved_ddraw;
 
