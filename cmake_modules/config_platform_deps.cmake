@@ -202,9 +202,10 @@ if(TARGET_POSIX)
 endif()
 
 if(TARGET_LINUX)
-    if(NOT TARGET_LINUX_GLES)
+    if(NOT TARGET_LINUX_GLES OR OPENJKDF2_GLES_DESKTOP)
         list(APPEND ENGINE_SOURCE_FILES ${PROJECT_SOURCE_DIR}/src/external/nativefiledialog-extended/nfd_gtk.cpp)
-    else()
+    endif()
+    if(TARGET_LINUX_GLES)
         list(APPEND ENGINE_SOURCE_FILES
             ${PROJECT_SOURCE_DIR}/src/Platform/Posix/cpp_runtime_gles.cpp
             ${PROJECT_SOURCE_DIR}/src/Platform/Posix/trace_gles.c
