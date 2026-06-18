@@ -20,6 +20,7 @@
 #include "Win95/stdDisplay.h"
 #include "Engine/rdroid.h"
 #include "Gui/jkGUIForce.h"
+#include "Gui/jkMpConf.h"
 #include "Platform/stdControl.h"
 #include "Main/jkRes.h"
 #include "General/stdStrTable.h"
@@ -1164,6 +1165,11 @@ int jkGuiBuildMulti_ShowNewCharacter(int rank, int bGameFormatIsJK, int bHasNoVa
         jkGuiBuildMulti_jediRank = rank;
     }
 
+    jkMpConf_PrefillNewCharacter(jkGuiBuildMulti_aWchar_5594C8, 32, &jkGuiBuildMulti_jediRank);
+    if (rank >= 0 && jkGuiBuildMulti_jediRank > rank)
+        jkGuiBuildMulti_jediRank = rank;
+    rank = jkGuiBuildMulti_jediRank;
+
     // MOTS added
     jkGuiRend_DarrayNewStr(&daPersonalities,8,1);
     for (int i = 0; i < 8; i++)
@@ -1186,7 +1192,8 @@ int jkGuiBuildMulti_ShowNewCharacter(int rank, int bGameFormatIsJK, int bHasNoVa
 
     // MOTS: 11 -> 14
     jkGuiBuildMulti_pNewCharacterElements[14].wstr = jkGuiBuildMulti_aWchar_5594C8; // 11
-    memset(jkGuiBuildMulti_aWchar_5594C8, 0, 0x20u);
+    if (!jkGuiBuildMulti_aWchar_5594C8[0])
+        memset(jkGuiBuildMulti_aWchar_5594C8, 0, 0x20u);
     jkGuiBuildMulti_pNewCharacterElements[14].selectedTextEntry = 16; // 11
     if ( bHasNoValidChars )
     {
@@ -1450,6 +1457,9 @@ int jkGuiBuildMulti_ShowLoad(jkPlayerMpcInfo *pPlayerMpcInfo, char *pStrEpisode,
     char tmp2[128]; // [esp+11Ch] [ebp-300h] BYREF
     char tmp3[128]; // [esp+19Ch] [ebp-280h] BYREF
     wchar_t wtmp1[256]; // [esp+21Ch] [ebp-200h] BYREF
+
+    if (jkMpConf_TryLoadCharacter(pPlayerMpcInfo))
+        return 1;
 
     if (!Main_bMotsCompat) {
         jkGuiBuildMulti_menuLoadCharacter_buttons[16].bIsVisible = 0;

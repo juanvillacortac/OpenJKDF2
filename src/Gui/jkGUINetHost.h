@@ -13,6 +13,12 @@
 
 void jkGuiNetHost_SaveSettings();
 void jkGuiNetHost_LoadSettings();
+void jkGuiNetHost_ApplyMpConfEpisodeMap(void);
+
+extern int jkGuiNetHost_portNum;
+extern int jkGuiNetHost_bIsDedicated;
+extern int jkGuiNetHost_bIsCoop;
+extern int jkGuiNetHost_bIsEpisodeCoop;
 
 void jkGuiNetHost_Startup();
 void jkGuiNetHost_Shutdown();

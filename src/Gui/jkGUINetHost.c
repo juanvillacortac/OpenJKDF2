@@ -12,6 +12,7 @@
 #include "Gui/jkGUI.h"
 #include "Gui/jkGUIDialog.h"
 #include "Gui/jkGUIMultiplayer.h"
+#include "Gui/jkMpConf.h"
 #include "Main/jkStrings.h"
 #include "Main/jkMain.h"
 #include "Win95/stdComm.h"
@@ -293,6 +294,42 @@ void jkGuiNetHost_Shutdown()
     jkGuiNetHost_bIsCoop = 0;
 }
 
+void jkGuiNetHost_ApplyMpConfEpisodeMap(void)
+{
+    int i;
+    const char *episode;
+    const char *map;
+    jkGuiElement *episodeEl = &jkGuiNetHost_aElements[NETHOST_EPISODE_LISTBOX];
+    jkGuiElement *levelEl = &jkGuiNetHost_aElements[NETHOST_LEVEL_LISTBOX];
+
+    if (!jkMpConf_HasHostEpisode())
+        return;
+
+    episode = jkMpConf_GetHostEpisode();
+    for (i = 0; i < episodeEl->texInfo.numTextEntries; i++) {
+        if (episodeEl->unistr[i].c_str && !__strcmpi(episodeEl->unistr[i].c_str, episode)) {
+            episodeEl->selectedTextEntry = i;
+            break;
+        }
+    }
+
+    jkGuiNetHost_sub_4119D0(episodeEl, &jkGuiNetHost_menu, -1, -1, 0);
+
+    if (!jkMpConf_HasHostMap())
+        return;
+
+    map = jkMpConf_GetHostMap();
+    for (i = 0; i < levelEl->texInfo.numTextEntries; i++) {
+        const char *mapId = (const char *)levelEl->unistr[i].c_str;
+        if (!mapId)
+            continue;
+        if (!__strcmpi(mapId + sizeof(int), map)) {
+            levelEl->selectedTextEntry = i;
+            break;
+        }
+    }
+}
+
 // MOTS altered
 int jkGuiNetHost_Show(jkMultiEntry3 *pMultiEntry)
 {
@@ -315,6 +352,7 @@ int jkGuiNetHost_Show(jkMultiEntry3 *pMultiEntry)
     wchar_t v30[32]; // [esp+140h] [ebp-40h] BYREF
 
     jkGuiNetHost_LoadSettings(); // Added
+    jkMpConf_ApplyHostSettings();
 
     stdString_SafeWStrCopy(v25, L"8", 0x20);
     stdString_SafeWStrCopy(v26, L"", 0x20);
@@ -351,6 +389,7 @@ int jkGuiNetHost_Show(jkMultiEntry3 *pMultiEntry)
     __snprintf(v29, 32, "RANK_%d_L", jkGuiNetHost_maxRank); // sprintf -> snprintf
     jk_snwprintf(jkGuiNetHost_wstrStarsText, 0x80u, jkStrings_GetUniStringWithFallback("GUI_RANK"), jkGuiNetHost_maxRank, jkStrings_GetUniStringWithFallback(v29));
     memset(v30, 0, sizeof(v30));
+    jkMpConf_CopyHostPassword(v30, 32);
     jkGuiNetHost_aElements[NETHOST_STARS_TEXT].wstr = jkGuiNetHost_wstrStarsText;
     jkGuiNetHost_aElements[NETHOST_PASSWORD_TEXTBOX].wstr = v30;
     jkGuiNetHost_aElements[NETHOST_PASSWORD_TEXTBOX].selectedTextEntry = 16;
@@ -372,6 +411,7 @@ int jkGuiNetHost_Show(jkMultiEntry3 *pMultiEntry)
     
     jkGuiNetHost_aElements[NETHOST_EPISODE_LISTBOX].selectedTextEntry = 0;
     jkGuiNetHost_sub_4119D0(&jkGuiNetHost_aElements[NETHOST_EPISODE_LISTBOX], &jkGuiNetHost_menu, -1, -1, 0);
+    jkGuiNetHost_ApplyMpConfEpisodeMap();
 
     do
     {

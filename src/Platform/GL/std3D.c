@@ -1699,18 +1699,22 @@ void std3D_DrawMenu()
     }
     else
     {
+#if defined(OPENJKDF2_RUNTIME_GL)
+        if (!openjkdf2_UseGLES() && jkGame_isDDraw) {
+            /* Desktop GL on PortMaster x86_64 (Steam Deck): composite 3D in the
+             * center and draw HUD strips from the 640x480 menu buffer. */
+            bFixHudScale = 1;
+            menu_w = Video_menuBuffer.format.width;
+            menu_h = Video_menuBuffer.format.height;
+        } else
+#endif
         if (openjkdf2_IsHandheld()) {
-            /* Stretch the 640x480 game/HUD buffer to the (possibly downscaled) window. */
+            /* GLES handheld: stretch the 640x480 game/HUD buffer to the window. */
             menu_w = (double)Window_xSize;
             menu_h = (double)Window_ySize;
             menu_u = 1.0;
             menu_v = 1.0;
         } else {
-#if defined(OPENJKDF2_RUNTIME_GL)
-            if (!openjkdf2_UseGLES() && jkGame_isDDraw) {
-                bFixHudScale = 1;
-            }
-#endif
             menu_w = Video_menuBuffer.format.width;
             menu_h = Video_menuBuffer.format.height;
         }

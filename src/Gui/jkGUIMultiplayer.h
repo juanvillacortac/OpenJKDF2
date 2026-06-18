@@ -31,6 +31,8 @@
 //#define jkGuiMultiplayer_aElements3 ((jkGuiElement*)0x0052C6C0)
 //#define jkGuiMultiplayer_aElements4 ((jkGuiElement*)0x0052CBC0)
 
+extern wchar_t jkGuiMultiplayer_ipText[256];
+
 void jkGuiMultiplayer_Startup();
 void jkGuiMultiplayer_Shutdown();
 int jkGuiMultiplayer_Show();

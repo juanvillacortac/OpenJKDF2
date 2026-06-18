@@ -10,6 +10,7 @@
 #include "Gui/jkGUI.h"
 #include "Gui/jkGUIBuildMulti.h"
 #include "Gui/jkGUINetHost.h"
+#include "Gui/jkMpConf.h"
 #include "Gui/jkGUIDialog.h"
 #include "Main/jkStrings.h"
 #include "Main/jkMain.h"
@@ -19,6 +20,7 @@
 #include "Devices/sithComm.h"
 
 static int jkGuiMultiplayer_bInitted = 0;
+wchar_t jkGuiMultiplayer_ipText[256];
 static int32_t jkGuiMultiplayer_aElements2_aIdk[2] = {0xd, 0xe};
 static int32_t jkGuiMultiplayer_aElements3_aIdk[2] = {0xd, 0xe};
 
@@ -76,8 +78,6 @@ static jkGuiMenu jkGuiMultiplayer_menu2 = {jkGuiMultiplayer_aElements2, 0, 0xFFF
 static jkGuiMenu jkGuiMultiplayer_menu3 = {jkGuiMultiplayer_aElements3, 0, 0xFFFF, 0xFFFF, 0xF, 0, 0, jkGui_stdBitmaps, jkGui_stdFonts, 0, jkGuiMultiplayer_sub_4140B0, "thermloop01.wav", "thrmlpu2.wav", 0, 0, 0, 0, 0, 0};
 static jkGuiMenu jkGuiMultiplayer_menu4 = {jkGuiMultiplayer_aElements4, -1, 0xFFFF, 0xFFFF, 0xF, 0, 0, jkGui_stdBitmaps, jkGui_stdFonts, 0, jkGuiMultiplayer_idk, "thermloop01.wav", "thrmlpu2.wav", 0, 0, 0, 0, 0, 0};
 
-wchar_t jkGuiMultiplayer_ipText[256];
-
 void jkGuiMultiplayer_Startup()
 {
     stdPlatform_Printf("OpenJKDF2: %s\n", __func__); // Added
@@ -88,8 +88,9 @@ void jkGuiMultiplayer_Startup()
     jkGui_InitMenu(&jkGuiMultiplayer_menu4, jkGui_stdBitmaps[JKGUI_BM_BK_MULTI]);
     jkGuiMultiplayer_bInitted = 1;
 
-#ifdef QOL_IMPROVEMENTS
     wuRegistry_GetWString("lastConnectedHost", jkGuiMultiplayer_ipText, 0x100, L"127.0.0.1");
+    jkMpConf_ApplyJoin();
+#ifdef QOL_IMPROVEMENTS
     jkGuiMultiplayer_aElements3[11].wstr = jkGuiMultiplayer_ipText;
     jkGuiMultiplayer_aElements3[11].selectedTextEntry = 255;
 #endif
@@ -198,6 +199,7 @@ LABEL_1:
                     jkGuiRend_DarrayFree(&a1);
                     if ( v3 != 1 )
                         continue;
+                    jkMpConf_ApplyJoin();
                     _memset(&v35, 0, sizeof(v35));
                     _memset(&jkGuiMultiplayer_stru_556168, 0, sizeof(jkGuiMultiplayer_stru_556168));
                     memset(&jkGui_guid_556040, 0, sizeof(GUID));
