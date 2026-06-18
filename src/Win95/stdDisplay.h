@@ -114,7 +114,7 @@ void stdDisplay_SyncMenuBufferFormat(void);
 uint8_t* stdDisplay_VBufferPixels(stdVBuffer *vbuf);
 int stdDisplay_EnsureMenuGLTextures(void);
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 int stdDisplay_ResizeOverlayMapBuffer(uint32_t w, uint32_t h);
 #endif
 

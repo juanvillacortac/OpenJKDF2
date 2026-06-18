@@ -71,6 +71,8 @@ void Window_SdlVblank();
 void Window_RecreateSDL2Window();
 void Window_BeginScreenDraw(void);
 void Window_SetPresentViewport(void);
+void Window_ClearPresentSurface(void);
+void Window_ShutdownSDL(void);
 #endif
 
 #endif // _WINDOW_H

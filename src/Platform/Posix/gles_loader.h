@@ -1,7 +1,7 @@
 #ifndef _OPENJKDF2_GLES_LOADER_H
 #define _OPENJKDF2_GLES_LOADER_H
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 
 #include <GLES3/gl3.h>
 #include <stdbool.h>

@@ -135,7 +135,7 @@ int std3D_ShouldFitMenu4x3(double winW, double winH);
 void std3D_FitMenu4x3(double winW, double winH, double *outX, double *outY, double *outW, double *outH);
 void std3D_ComputeMenuRect(double winW, double winH, double *outX, double *outY, double *outW, double *outH);
 void std3D_MarkMenuBufferDirty(void);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 void std3D_InvalidateGLContext(void);
 void std3D_NotifyMenuPaletteChange(void);
 void std3D_LeaveCutsceneMenuMode(void);

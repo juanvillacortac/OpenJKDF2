@@ -122,6 +122,18 @@ GLuint create_shader(const char* shader, GLenum type) {
     }
     extensions = "\n";
     defines = "#define CAN_BILINEAR_FILTER\n";
+#elif defined(OPENJKDF2_RUNTIME_GL)
+    if (profile == SDL_GL_CONTEXT_PROFILE_ES) {
+        int gl_major = 0;
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &gl_major);
+        if (gl_major < 3) {
+            version = "#version 100\n";
+        } else {
+            version = "#version 300 es\n";
+        }
+        extensions = "\n";
+        defines = "#define CAN_BILINEAR_FILTER\n";
+    }
 #endif
 
 	// GLES2 precision specifiers

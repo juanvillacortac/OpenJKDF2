@@ -1,5 +1,6 @@
 #include "jkCutscene.h"
 #include "Platform/handheld.h"
+#include "Platform/gl_backend.h"
 
 #include "General/stdStrTable.h"
 #include "General/stdFont.h"
@@ -597,7 +598,7 @@ int jkCutscene_sub_421410()
     last_audioUs = 0;
     extraUs = 0;
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     jkGui_RestoreMenuPaletteAfterCutscene();
     stdDisplay_VBufferFill(Video_pMenuBuffer, 0, NULL);
     std3D_LeaveCutsceneMenuMode();
@@ -642,7 +643,7 @@ int jkCutscene_smack_related_loops()
                 if (!openjkdf2_bIsKVM)
                     smack_sub_426940();
 #endif
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
                 jkGui_RestoreMenuPaletteAfterCutscene();
                 stdDisplay_VBufferFill(Video_pMenuBuffer, 0, NULL);
                 std3D_LeaveCutsceneMenuMode();

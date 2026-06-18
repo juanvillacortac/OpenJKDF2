@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #ifndef _WIN32
 #include <unistd.h>
+#include <signal.h>
 #endif //!_WIN32
 
 #if !defined(WIN64_MINGW) && !defined(_WIN32)
@@ -42,8 +43,112 @@
 #include "SDL2_helper.h"
 #include "Platform/trace_gles.h"
 #include "Platform/handheld.h"
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX)
+#include "Platform/linux_display.h"
+#endif
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
+#include "Platform/gl_backend.h"
 #include "Platform/Posix/gles_loader.h"
+#endif
+
+#if defined(OPENJKDF2_RUNTIME_GL)
+extern SDL_Window *displayWindow;
+
+static void Window_SetGLAttributesForBackend(openjkdf2_gl_backend_t backend)
+{
+    if (backend == OPENJKDF2_GL_BACKEND_GLES) {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    } else {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    }
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+}
+
+static SDL_GLContext Window_TryGLESContext(void)
+{
+    SDL_GLContext ctx = SDL_GL_CreateContext(displayWindow);
+    if (ctx)
+        return ctx;
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+    ctx = SDL_GL_CreateContext(displayWindow);
+    if (ctx)
+        openjkdf2_trace("Window_RecreateSDL2Window: GLES 2.0 context");
+    return ctx;
+}
+
+static SDL_GLContext Window_TryDesktopContext(void)
+{
+    SDL_GLContext ctx = SDL_GL_CreateContext(displayWindow);
+    if (ctx)
+        return ctx;
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+    ctx = SDL_GL_CreateContext(displayWindow);
+    if (ctx)
+        return ctx;
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+    return SDL_GL_CreateContext(displayWindow);
+}
+
+static SDL_GLContext Window_CreateRuntimeGLContext(void)
+{
+    openjkdf2_gl_backend_t prefer = openjkdf2_PreferGLBackend();
+    openjkdf2_gl_backend_t order[2] = {
+        prefer,
+        prefer == OPENJKDF2_GL_BACKEND_GLES ? OPENJKDF2_GL_BACKEND_DESKTOP : OPENJKDF2_GL_BACKEND_GLES,
+    };
+
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        Window_SetGLAttributesForBackend(order[attempt]);
+        SDL_GLContext ctx = (order[attempt] == OPENJKDF2_GL_BACKEND_GLES)
+            ? Window_TryGLESContext()
+            : Window_TryDesktopContext();
+        if (ctx) {
+            openjkdf2_SetGLBackend(order[attempt]);
+            return ctx;
+        }
+    }
+    return NULL;
+}
+
+static int Window_InitGLAfterContext(void)
+{
+    openjkdf2_InitGLBackendFromContext();
+    if (!gles_loader_init()) {
+        openjkdf2_trace("Window_RecreateSDL2Window: gles_loader_init failed");
+        fprintf(stderr, "OpenJKDF2: GL loader init failed (missing GL symbols)\n");
+        fflush(stderr);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error",
+            "GL loader init failed. See log.txt / startup.log.", NULL);
+        return 0;
+    }
+    {
+        const GLubyte *ver = glGetString(GL_VERSION);
+        const GLubyte *renderer = glGetString(GL_RENDERER);
+        openjkdf2_trace_fmt("Window_RecreateSDL2Window: GL_VERSION=%s",
+            ver ? (const char*)ver : "null");
+        openjkdf2_trace_fmt("Window_RecreateSDL2Window: GL_RENDERER=%s",
+            renderer ? (const char*)renderer : "null");
+        stdPlatform_Printf("OpenJKDF2: GL %s (%s)\n",
+            ver ? (const char*)ver : "unknown",
+            renderer ? (const char*)renderer : "unknown");
+    }
+    return 1;
+}
 #endif
 
 #include <string.h>
@@ -227,6 +332,21 @@ void Window_SetPresentViewport(void)
     glViewport(0, 0, Window_xSize, Window_ySize);
 }
 
+void Window_ClearPresentSurface(void)
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    if (openjkdf2_IsHandheld() && Window_bForcedResolution && Window_physXSize > 0 && Window_physYSize > 0) {
+        glViewport(0, 0, Window_physXSize, Window_physYSize);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+    }
+
+    Window_SetPresentViewport();
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
 void Window_BeginScreenDraw(void)
 {
     if (!openjkdf2_IsHandheld())
@@ -234,11 +354,7 @@ void Window_BeginScreenDraw(void)
     if (!Window_bForcedResolution || Window_presentW <= 0 || Window_presentH <= 0)
         return;
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, Window_physXSize, Window_physYSize);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    Window_SetPresentViewport();
+    Window_ClearPresentSurface();
 }
 #endif /* SDL2_RENDER */
 
@@ -248,7 +364,10 @@ void Window_SetHiDpi(int val)
     {
         Window_isHiDpi = val;
 
-#if !defined(TARGET_LINUX_GLES) && !defined(TARGET_ANDROID)
+#if defined(OPENJKDF2_RUNTIME_GL)
+        if (!openjkdf2_UseGLESPath())
+            Window_needsRecreate = 1;
+#elif !defined(TARGET_LINUX_GLES) && !defined(TARGET_ANDROID)
         Window_needsRecreate = 1;
 #endif
     }
@@ -262,7 +381,18 @@ void Window_SetFullscreen(int val)
     {
         // Reset window when exiting fullscreen
         // TODO: Add settings for these sizes maybe?
-#if !defined(TARGET_LINUX_GLES) && !defined(TARGET_ANDROID)
+#if defined(OPENJKDF2_RUNTIME_GL)
+        if (!openjkdf2_UseGLESPath() && Window_isFullscreen && !val) {
+            Window_xSize = WINDOW_DEFAULT_WIDTH;
+            Window_ySize = WINDOW_DEFAULT_HEIGHT;
+            Window_screenXSize = WINDOW_DEFAULT_WIDTH;
+            Window_screenYSize = WINDOW_DEFAULT_HEIGHT;
+#ifdef SDL2_RENDER
+            Window_xPos = SDL_WINDOWPOS_CENTERED;
+            Window_yPos = SDL_WINDOWPOS_CENTERED;
+#endif
+        }
+#elif !defined(TARGET_LINUX_GLES) && !defined(TARGET_ANDROID)
         if (Window_isFullscreen && !val) {
             Window_xSize = WINDOW_DEFAULT_WIDTH;
             Window_ySize = WINDOW_DEFAULT_HEIGHT;
@@ -276,7 +406,10 @@ void Window_SetFullscreen(int val)
 #endif
 
         Window_isFullscreen = val;
-#if !defined(TARGET_LINUX_GLES) && !defined(TARGET_ANDROID)
+#if defined(OPENJKDF2_RUNTIME_GL)
+        if (!openjkdf2_UseGLESPath())
+            Window_needsRecreate = 1;
+#elif !defined(TARGET_LINUX_GLES) && !defined(TARGET_ANDROID)
         Window_needsRecreate = 1;
 #endif
     }
@@ -552,6 +685,58 @@ int Window_DefaultHandler(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam, voi
 SDL_Window* displayWindow = NULL;
 SDL_Event event;
 SDL_GLContext glWindowContext;
+
+static int Window_sdlShutdownDone = 0;
+
+static void Window_SignalHandler(int sig)
+{
+    (void)sig;
+    g_should_exit = 1;
+}
+
+static void Window_RegisterSignalHandlers(void)
+{
+#ifndef _WIN32
+    struct sigaction sa = {0};
+
+    sa.sa_handler = Window_SignalHandler;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+#endif
+}
+
+void Window_ShutdownSDL(void)
+{
+    if (Window_sdlShutdownDone)
+        return;
+    Window_sdlShutdownDone = 1;
+
+    openjkdf2_trace("Window_ShutdownSDL: enter");
+
+    if (displayWindow && glWindowContext)
+        SDL_GL_MakeCurrent(displayWindow, glWindowContext);
+
+    std3D_FreeResources();
+
+    if (glWindowContext) {
+        SDL_GL_DeleteContext(glWindowContext);
+        glWindowContext = NULL;
+    }
+    if (displayWindow) {
+        SDL_DestroyWindow(displayWindow);
+        displayWindow = NULL;
+    }
+
+    if (SDL_WasInit(0))
+        SDL_Quit();
+
+#if defined(TARGET_LINUX)
+    openjkdf2_RestoreLinuxConsole();
+#endif
+
+    openjkdf2_trace("Window_ShutdownSDL: done");
+}
 
 static void Window_RestoreInputFocus(void)
 {
@@ -1537,12 +1722,20 @@ void Window_RecreateSDL2Window()
 #if defined(TARGET_ANDROID) || defined(TARGET_LINUX_GLES)
     /* OPENGL required for SDL_GL_CreateContext (Wayland/ROCKNIX rejects GL on non-GL windows). */
     flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN_DESKTOP;
+#elif defined(OPENJKDF2_RUNTIME_GL)
+    if (openjkdf2_UseGLESPath())
+        flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN_DESKTOP;
 #endif
 
 #ifdef ARCH_WASM
     displayWindow = SDL_CreateWindow(Window_isHiDpi ? "OpenJKDF2 HiDPI" : "OpenJKDF2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, canvas_get_width(), canvas_get_height(), flags);
 #elif defined(TARGET_ANDROID) || defined(TARGET_LINUX_GLES)
     displayWindow = SDL_CreateWindow(Window_isHiDpi ? "OpenJKDF2 HiDPI" : "OpenJKDF2", 0, 0, Window_screenXSize, Window_screenYSize, flags);
+#elif defined(OPENJKDF2_RUNTIME_GL)
+    if (openjkdf2_UseGLESPath())
+        displayWindow = SDL_CreateWindow(Window_isHiDpi ? "OpenJKDF2 HiDPI" : "OpenJKDF2", 0, 0, Window_screenXSize, Window_screenYSize, flags);
+    else
+        displayWindow = SDL_CreateWindow(Window_isHiDpi ? "OpenJKDF2 HiDPI" : "OpenJKDF2", Window_xPos, Window_yPos, Window_screenXSize, Window_screenYSize, flags);
 #else
     displayWindow = SDL_CreateWindow(Window_isHiDpi ? "OpenJKDF2 HiDPI" : "OpenJKDF2", Window_xPos, Window_yPos, Window_screenXSize, Window_screenYSize, flags);
 #endif
@@ -1570,9 +1763,10 @@ void Window_RecreateSDL2Window()
     }
     SDL_RaiseWindow(displayWindow);
 
+#if defined(OPENJKDF2_RUNTIME_GL)
+    glWindowContext = Window_CreateRuntimeGLContext();
+#elif defined(TARGET_ANDROID) || defined(TARGET_LINUX_GLES)
     glWindowContext = SDL_GL_CreateContext(displayWindow);
-
-#if defined(TARGET_ANDROID) || defined(TARGET_LINUX_GLES)
     // GLES fallback: 3.0 ES -> 2.0 ES (no desktop GL CORE on Mali/KMSDRM)
     if (glWindowContext == NULL)
     {
@@ -1586,6 +1780,7 @@ void Window_RecreateSDL2Window()
         }
     }
 #else
+    glWindowContext = SDL_GL_CreateContext(displayWindow);
     // Retry with 3.30 instead
     if (glWindowContext == NULL)
     {
@@ -1623,7 +1818,10 @@ void Window_RecreateSDL2Window()
     if (SDL_GL_MakeCurrent(displayWindow, glWindowContext) != 0) {
         openjkdf2_trace_fmt("Window_RecreateSDL2Window: MakeCurrent failed: %s", SDL_GetError());
     }
-#if defined(TARGET_LINUX_GLES)
+#if defined(OPENJKDF2_RUNTIME_GL)
+    if (!Window_InitGLAfterContext())
+        exit(-1);
+#elif defined(TARGET_LINUX_GLES)
     {
         int gl_major = 0, gl_minor = 0, gl_profile = 0;
         SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &gl_major);
@@ -1682,13 +1880,54 @@ void Window_Main_Loop()
     //Window_SdlUpdate();
 }
 
+#ifndef _WIN32
+static void Window_ConfigureAudioDriver(void)
+{
+    const char *driver = getenv("SDL_AUDIODRIVER");
+
+    /* PortMaster/RetroDECK often export SDL_AUDIODRIVER=dsp; no /dev/dsp on modern handhelds. */
+    if (driver && driver[0]) {
+        if (SDL_strcasecmp(driver, "dsp") == 0 || SDL_strcasecmp(driver, "oss") == 0) {
+            fprintf(stderr, "OpenJKDF2: SDL_AUDIODRIVER=%s not supported, using alsa\n", driver);
+            SDL_setenv("SDL_AUDIODRIVER", "alsa", 1);
+        }
+    }
+}
+
+static int Window_InitSDL(void)
+{
+    Uint32 flags = SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_NOPARACHUTE | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO;
+
+    Window_ConfigureAudioDriver();
+
+    if (SDL_Init(flags) == 0)
+        return 0;
+
+    fprintf(stderr, "OpenJKDF2: SDL_Init failed (%s), retrying without SDL audio\n", SDL_GetError());
+    SDL_ClearError();
+    flags &= ~SDL_INIT_AUDIO;
+    if (SDL_Init(flags) == 0) {
+        fprintf(stderr, "OpenJKDF2: continuing without SDL audio (OpenAL handles game audio)\n");
+        return 0;
+    }
+
+    fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+    return -1;
+}
+#endif
+
 int Window_Main_Linux(int argc, char** argv)
 {
     char cmdLine[1024];
     int result;
+    int exit_code = 1;
+    int sdl_inited = 0;
 
     // Init SDL
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
+#if defined(TARGET_LINUX)
+    openjkdf2_InitLinuxDisplayEnv();
+#endif
     openjkdf2_InitHandheldMode();
     openjkdf2_InitLowMemoryMode();
     {
@@ -1701,6 +1940,14 @@ int Window_Main_Linux(int argc, char** argv)
 #if defined(TARGET_LINUX_GLES)
     /* GLES-only binary: force ES driver when desktop GL is also available (ROCKNIX). */
     if (!getenv("SDL_OPENGL_ES_DRIVER"))
+        SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
+#elif defined(OPENJKDF2_RUNTIME_GL)
+    if (openjkdf2_PreferGLBackend() == OPENJKDF2_GL_BACKEND_GLES
+        && !getenv("SDL_OPENGL_ES_DRIVER")) {
+        SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
+    }
+#elif defined(TARGET_LINUX)
+    if (openjkdf2_IsLinuxKmsDisplay() && !getenv("SDL_OPENGL_ES_DRIVER"))
         SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
 #endif
 
@@ -1719,12 +1966,41 @@ int Window_Main_Linux(int argc, char** argv)
 #endif
 
     openjkdf2_trace("Window_Main_Linux: SDL_Init");
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_NOPARACHUTE | SDL_INIT_GAMECONTROLLER) < 0) {
+    if (Window_InitSDL() < 0) {
         openjkdf2_trace("Window_Main_Linux: SDL_Init failed");
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
+    sdl_inited = 1;
+    Window_RegisterSignalHandlers();
     openjkdf2_trace("Window_Main_Linux: SDL_Init ok");
+
+#if defined(TARGET_LINUX)
+    if (openjkdf2_IsLinuxKmsDisplay()) {
+        const char *driver = SDL_GetCurrentVideoDriver();
+        if (!driver || SDL_strcasecmp(driver, "kmsdrm") != 0) {
+            fprintf(stderr,
+                "OpenJKDF2: Linux VT requires kmsdrm (got %s). "
+                "Rebuild with SDL KMSDRM enabled.\n",
+                driver ? driver : "none");
+            exit_code = 1;
+            goto shutdown;
+        }
+        Window_isFullscreen = 1;
+        {
+            SDL_DisplayMode mode;
+            if (SDL_GetDesktopDisplayMode(0, &mode) == 0) {
+                Window_screenXSize = mode.w;
+                Window_screenYSize = mode.h;
+                Window_xSize = mode.w;
+                Window_ySize = mode.h;
+            }
+        }
+    }
+#endif
+
+#if defined(OPENJKDF2_RUNTIME_GL)
+    openjkdf2_SetGLBackend(openjkdf2_PreferGLBackend());
+#endif
 
     if (openjkdf2_IsHandheld()) {
         const char* w_env = getenv("DISPLAY_WIDTH");
@@ -1773,6 +2049,8 @@ int Window_Main_Linux(int argc, char** argv)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+#elif defined(OPENJKDF2_RUNTIME_GL)
+    Window_SetGLAttributesForBackend(openjkdf2_PreferGLBackend());
 #elif defined(ARCH_WASM)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -1790,7 +2068,7 @@ int Window_Main_Linux(int argc, char** argv)
     openjkdf2_trace("Window_Main_Linux: Window_RecreateSDL2Window");
     Window_RecreateSDL2Window();
     openjkdf2_trace("Window_Main_Linux: GL context ok");
-#if !defined(TARGET_ANDROID) && !defined(TARGET_LINUX_GLES) && !defined(ARCH_WASM)
+#if !defined(TARGET_ANDROID) && !defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL) && !defined(ARCH_WASM)
     glewInit();
 #endif
     
@@ -1837,7 +2115,10 @@ int Window_Main_Linux(int argc, char** argv)
     }
     openjkdf2_trace("Window_Main_Linux: window ready");
 
-    if (!result) return result;
+    if (!result) {
+        exit_code = result;
+        goto shutdown;
+    }
 
     if (Main_bHeadless)
     {
@@ -1885,7 +2166,12 @@ int Window_Main_Linux(int argc, char** argv)
     }
 
     Main_Shutdown();
-    return 1;
+    exit_code = 1;
+
+shutdown:
+    if (sdl_inited)
+        Window_ShutdownSDL();
+    return exit_code;
 }
 
 int Window_Main(HINSTANCE hInstance, int a2, char *lpCmdLine, int nShowCmd, LPCSTR lpWindowName)

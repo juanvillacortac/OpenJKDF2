@@ -1,7 +1,7 @@
 #ifndef _OPENJKDF2_TRACE_GLES_H
 #define _OPENJKDF2_TRACE_GLES_H
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 void openjkdf2_trace(const char *msg);
 void openjkdf2_trace_fmt(const char *fmt, ...);
 #else

@@ -1,4 +1,5 @@
 #include "sithMain.h"
+#include "Platform/gl_backend.h"
 
 #include "Main/jkGame.h"
 #include "Main/Main.h"
@@ -12,7 +13,7 @@
 #include "Win95/stdComm.h"
 #include "Devices/sithConsole.h"
 #include "Win95/Window.h"
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 #include "Platform/trace_gles.h"
 #endif
 #include "AI/sithAI.h"

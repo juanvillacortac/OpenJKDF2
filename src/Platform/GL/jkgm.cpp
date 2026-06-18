@@ -575,7 +575,7 @@ std::string jkgm_get_tex_hash(stdVBuffer *vbuf, rdDDrawSurface *texture, rdMater
 
 void jkgm_populate_shortcuts(stdVBuffer *vbuf, rdDDrawSurface *texture, rdMaterial* material, int is_alpha_tex, int mipmap_level, int cel)
 {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     return;
 #endif
     if (Main_bHeadless) return;

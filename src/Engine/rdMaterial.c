@@ -1,4 +1,5 @@
 #include "rdMaterial.h"
+#include "Platform/gl_backend.h"
 
 #include "General/stdString.h"
 #include "Engine/rdroid.h"
@@ -12,7 +13,7 @@
 #ifdef SDL2_RENDER
 #include "Platform/GL/jkgm.h"
 #endif
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 #include "Platform/trace_gles.h"
 #include "Platform/handheld.h"
 #endif
@@ -305,14 +306,18 @@ LABEL_21:
 #endif
 
 #if !defined(TARGET_TWL)
-#if !defined(TARGET_LINUX_GLES)
+#if !defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
         printf("Load %s tex %d/%d mip %d/%d\n", mat_fpath, tex_numa, material->num_textures, mipmap_num, texture->num_mipmaps);
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (!openjkdf2_UseGLES()) {
+        printf("Load %s tex %d/%d mip %d/%d\n", mat_fpath, tex_numa, material->num_textures, mipmap_num, texture->num_mipmaps);
+}
 #endif
         created_tex = stdDisplay_VBufferNew(&format, create_ddraw_surface, gpu_mem, 0);
         *texture_struct = created_tex;
         if ( !created_tex )
         {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
           openjkdf2_trace_fmt("rdMaterial: VBufferNew failed %s %ux%u bpp=%u",
               mat_fpath, format.width, format.height, format.format.bpp);
 #endif
@@ -324,7 +329,7 @@ LABEL_21:
         {
           void *pix = stdDisplay_VBufferPixels(*texture_struct);
           if (!pix) {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
             openjkdf2_trace_fmt("rdMaterial: null pixels %s", mat_fpath);
 #endif
             stdDisplay_VBufferUnlock(*texture_struct);
@@ -748,11 +753,23 @@ int rdMaterial_EnsureDataForced(rdMaterial* pMaterial) {
         if (!rdMaterial_LoadEntry_Deferred(pMaterial, 1, 1, 0)) {
             rdMaterial_PurgeMaterialCache();
             rdMaterial_LoadEntry_Deferred(pMaterial, 1, 1, 0);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
             if (!pMaterial->bDataLoaded && !openjkdf2_IsWorldLoading()) {
                 rdMaterial_PurgeEntireMaterialCache();
                 rdMaterial_LoadEntry_Deferred(pMaterial, 1, 1, 0);
             }
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+            if (!pMaterial->bDataLoaded && !openjkdf2_IsWorldLoading()) {
+                rdMaterial_PurgeEntireMaterialCache();
+                rdMaterial_LoadEntry_Deferred(pMaterial, 1, 1, 0);
+            }
+} else {
+            if (!pMaterial->bDataLoaded) {
+                rdMaterial_PurgeEntireMaterialCache();
+                rdMaterial_LoadEntry_Deferred(pMaterial, 1, 1, 0);
+            }
+}
 #else
             if (!pMaterial->bDataLoaded) {
                 rdMaterial_PurgeEntireMaterialCache();
@@ -1084,7 +1101,7 @@ int rdMaterial_PurgeMaterialCache()
     int32_t frameAge;
     rdMaterial* pNextCachedMaterial = NULL;
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
     int handheld;
 
     if (openjkdf2_IsWorldLoading())
@@ -1092,6 +1109,19 @@ int rdMaterial_PurgeMaterialCache()
     handheld = !aggressive && openjkdf2_IsHandheld();
     purgeLimit = aggressive ? 40 : (handheld ? 120 : 240);
     purgeStep = aggressive ? 8 : (handheld ? 12 : 20);
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+    int handheld;
+
+    if (openjkdf2_IsWorldLoading())
+        return 0;
+    handheld = !aggressive && openjkdf2_IsHandheld();
+    purgeLimit = aggressive ? 40 : (handheld ? 120 : 240);
+    purgeStep = aggressive ? 8 : (handheld ? 12 : 20);
+} else {
+    purgeLimit = aggressive ? 40 : 240;
+    purgeStep = aggressive ? 8 : 20;
+}
 #else
     purgeLimit = aggressive ? 40 : 240;
     purgeStep = aggressive ? 8 : 20;
@@ -1136,7 +1166,7 @@ int rdMaterial_PurgeEntireMaterialCache()
     int res = 0;
     int prev_std3D_frameCount = std3D_frameCount;
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     if (openjkdf2_IsWorldLoading())
         return 0;
 #endif

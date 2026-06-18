@@ -53,7 +53,9 @@ if(EXPERIMENTAL_FIXED_POINT)
     add_definitions(-DEXPERIMENTAL_FIXED_POINT)
 endif()
 
-if(NOT TARGET_LINUX_GLES)
+# Desktop GL (GLEW/GLUT): legacy desktop builds and x86_64 runtime-GL only.
+# AArch64 runtime-GL uses GLES + gles_loader (no desktop OpenGL in cross-docker).
+if(OPENJKDF2_RUNTIME_GL_DESKTOP OR (NOT TARGET_LINUX_GLES AND NOT OPENJKDF2_RUNTIME_GL))
     find_package(GLUT)
     if(NOT FreeGLUT_FOUND OR CMAKE_CROSSCOMPILING)
         message(STATUS "Going to build “FreeGLUT 3.4.0” from Git module")
@@ -202,10 +204,10 @@ if(TARGET_POSIX)
 endif()
 
 if(TARGET_LINUX)
-    if(NOT TARGET_LINUX_GLES OR OPENJKDF2_GLES_DESKTOP)
+    if(OPENJKDF2_RUNTIME_GL_DESKTOP OR (NOT TARGET_LINUX_GLES AND NOT OPENJKDF2_RUNTIME_GL))
         list(APPEND ENGINE_SOURCE_FILES ${PROJECT_SOURCE_DIR}/src/external/nativefiledialog-extended/nfd_gtk.cpp)
     endif()
-    if(TARGET_LINUX_GLES)
+    if(TARGET_LINUX_GLES OR OPENJKDF2_RUNTIME_GL)
         list(APPEND ENGINE_SOURCE_FILES
             ${PROJECT_SOURCE_DIR}/src/Platform/Posix/cpp_runtime_gles.cpp
             ${PROJECT_SOURCE_DIR}/src/Platform/Posix/trace_gles.c

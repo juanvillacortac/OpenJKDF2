@@ -1,4 +1,4 @@
-include(cmake_modules/target_linux_gles.cmake)
+include(cmake_modules/target_linux_runtime_gl_aarch64.cmake)
 
 macro(plat_initialize)
     message(STATUS "Targeting Linux AArch64 (GLES handheld)")
@@ -8,7 +8,7 @@ macro(plat_initialize)
     add_definitions(-DARCH_64BIT)
     add_definitions(-D_XOPEN_SOURCE=500)
     add_definitions(-D_DEFAULT_SOURCE)
-    add_definitions(-DTARGET_LINUX_GLES)
+    add_definitions(-DOPENJKDF2_RUNTIME_GL)
     add_definitions(-DSMK_FAST)
 
     include(cmake_modules/plat_feat_full_sdl2.cmake)
@@ -20,7 +20,7 @@ macro(plat_initialize)
     set(TARGET_USE_GAMENETWORKINGSOCKETS FALSE)
 
     set(TARGET_LINUX TRUE)
-    set(TARGET_LINUX_GLES TRUE)
+    set(OPENJKDF2_RUNTIME_GL TRUE)
 
     # Headers GLES/EGL Khronos (agnósticos de arquitectura) + sysroot aarch64
     include_directories(/usr/aarch64-linux-gnu/include /usr/include)

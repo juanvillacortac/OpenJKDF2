@@ -60,7 +60,7 @@ extern "C" {
 #define GL_BGR 0x80E0
 #endif
 
-#elif defined(TARGET_LINUX_GLES)
+#elif defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 #include <SDL.h>
 #include <SDL_opengles2.h>
 #include <GLES3/gl3.h>

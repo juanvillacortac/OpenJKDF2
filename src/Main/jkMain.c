@@ -1,4 +1,5 @@
 #include "jkMain.h"
+#include "Platform/gl_backend.h"
 
 #include "../jk.h"
 #include "Platform/handheld.h"
@@ -583,7 +584,7 @@ void jkMain_GameplayShow(int a1, int a2)
         jkGuiTitle_LoadingFinalize();
         if ( !level_loaded )
         {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
             stdPlatform_Printf("OpenJKDF2: level load failed for '%s' (gameMode=%d)\n",
                 jkMain_aLevelJklFname, jkSmack_gameMode);
 #endif
@@ -1566,7 +1567,7 @@ void jkMain_FixRes()
         Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].yMin = 0;
         Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].xMax = newW / 2;
         Video_modeStruct.aViewSizes[Video_modeStruct.viewSizeIdx].yMax = newH / 2;
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
         stdDisplay_ResizeOverlayMapBuffer(newW, newH);
 #endif
     } else {

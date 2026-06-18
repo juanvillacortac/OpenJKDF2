@@ -1,4 +1,5 @@
 #include "rdModel3.h"
+#include "Platform/gl_backend.h"
 
 #include "Engine/rdroid.h"
 #include "General/stdConffile.h"
@@ -14,7 +15,7 @@
 #include "Engine/rdColormap.h"
 #include "Primitives/rdPrimit3.h"
 #include "Primitives/rdDebug.h"
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 #include "Platform/trace_gles.h"
 #endif
 
@@ -64,7 +65,7 @@ rdModel3* rdModel3_New(char *path)
 // MOTS altered (RGB lights?)
 int rdModel3_Load(char *model_fpath, rdModel3 *model)
 {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     openjkdf2_trace_fmt("rdModel3_Load: %s", model_fpath ? model_fpath : "(null)");
 #endif
     rdMesh *mesh; // ebx

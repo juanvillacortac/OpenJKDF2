@@ -1,5 +1,6 @@
 #include "jkGUI.h"
 #include "Platform/handheld.h"
+#include "Platform/gl_backend.h"
 
 #include "General/Darray.h"
 #include "General/stdBitmap.h"
@@ -268,7 +269,7 @@ void jkGui_RestoreMenuPaletteAfterCutscene(void)
     if (!bg->palette)
         return;
     stdDisplay_SetMasterPalette((uint8_t*)bg->palette);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     std3D_NotifyMenuPaletteChange();
 #endif
 }
@@ -490,7 +491,7 @@ int jkGui_SetModeMenu(const void *palette)
     {
         if (palette)
             stdDisplay_SetMasterPalette((uint8_t*)palette);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
         std3D_NotifyMenuPaletteChange();
 #endif
         openjkdf2_trace("jkGui_SetModeMenu: after SetMode");

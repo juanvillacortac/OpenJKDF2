@@ -75,6 +75,9 @@ void Windows_Shutdown()
 #endif
 
     Windows_bInitted = 0;
+#ifdef SDL2_RENDER
+    Window_ShutdownSDL();
+#endif
 }
 
 int Windows_InitWindow()

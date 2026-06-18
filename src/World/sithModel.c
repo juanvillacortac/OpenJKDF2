@@ -1,4 +1,5 @@
 #include "sithModel.h"
+#include "Platform/gl_backend.h"
 
 #include "Primitives/rdModel3.h"
 #include "Engine/rdroid.h"
@@ -6,7 +7,7 @@
 #include "General/stdConffile.h"
 #include "stdPlatform.h"
 #include "jk.h"
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 #include "Platform/trace_gles.h"
 #endif
 

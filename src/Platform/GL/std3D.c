@@ -1,4 +1,5 @@
 #include "Platform/std3D.h"
+#include "Platform/gl_backend.h"
 
 #include "Raster/rdCache.h"
 #include "Win95/stdDisplay.h"
@@ -28,7 +29,7 @@ __declspec(dllexport) DWORD NvOptimusEnablement = 1;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 #endif
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 extern SDL_Window *displayWindow;
 extern SDL_GLContext glWindowContext;
 
@@ -67,7 +68,7 @@ static size_t std3D_menuVboCap;
 static size_t std3D_menuIboCap;
 static int std3D_menuBufferDirty = 1;
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 static int std3D_menuTexIsRgba = 0;
 
 extern size_t std3D_loadedTexturesAmt;
@@ -128,16 +129,29 @@ static int std3D_GlesRecoverTextureCacheSlots(void)
 static void std3D_uploadBuffer(GLuint buf, GLenum target, size_t size, const void *data, size_t *cap)
 {
     glBindBuffer(target, buf);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
     /* Mali: glBufferSubData often stalls; orphan via glBufferData is smoother. */
     glBufferData(target, size, data, GL_DYNAMIC_DRAW);
     if (size > *cap)
         *cap = size;
-#else
-    if (!data || size > *cap) {
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+    /* Mali: glBufferSubData often stalls; orphan via glBufferData is smoother. */
+    glBufferData(target, size, data, GL_DYNAMIC_DRAW);
+    if (size > *cap)
+        *cap = size;
+} else {
+    if (!data || size != *cap) {
         glBufferData(target, size, data, GL_DYNAMIC_DRAW);
-        if (size > *cap)
-            *cap = size;
+        *cap = size;
+    } else {
+        glBufferSubData(target, 0, size, data);
+    }
+}
+#else
+    if (!data || size != *cap) {
+        glBufferData(target, size, data, GL_DYNAMIC_DRAW);
+        *cap = size;
     } else {
         glBufferSubData(target, 0, size, data);
     }
@@ -149,7 +163,7 @@ void std3D_MarkMenuBufferDirty(void)
     std3D_menuBufferDirty = 1;
 }
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 static void std3D_SyncDisplayPalette(int force);
 
 void std3D_NotifyMenuPaletteChange(void)
@@ -246,7 +260,7 @@ GLint programMenu_attribute_coord3d, programMenu_attribute_v_color, programMenu_
 GLint programMenu_uniform_mvp, programMenu_uniform_tex, programMenu_uniform_displayPalette;
 GLint programMenu_uniform_worldPalette, programMenu_uniform_menuIndexed;
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 static uint8_t *std3D_cutsceneRgbaCache = NULL;
 static size_t std3D_cutsceneRgbaCacheBytes = 0;
 #endif
@@ -347,8 +361,14 @@ void std3D_generateIntermediateFbo(int32_t width, int32_t height, std3DIntermedi
     // Set up our framebuffer texture
     glGenTextures(1, &pFbo->tex);
     glBindTexture(GL_TEXTURE_2D, pFbo->tex);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+} else {
+    glTexImage2D(GL_TEXTURE_2D, 0, isFloat ? GL_RGBA16F : GL_RGBA8, width, height, 0, GL_RGBA, isFloat ? GL_FLOAT : GL_UNSIGNED_BYTE, NULL);
+}
 #else
     glTexImage2D(GL_TEXTURE_2D, 0, isFloat ? GL_RGBA16F : GL_RGBA8, width, height, 0, GL_RGBA, isFloat ? GL_FLOAT : GL_UNSIGNED_BYTE, NULL);
 #endif
@@ -357,7 +377,7 @@ void std3D_generateIntermediateFbo(int32_t width, int32_t height, std3DIntermedi
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-#if !defined(TARGET_LINUX_GLES)
+#if !defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
     glGenerateMipmap(GL_TEXTURE_2D);
 #else
@@ -415,8 +435,14 @@ void std3D_generateFramebuffer(int32_t width, int32_t height, std3DFramebuffer* 
     // Set up our emissive fb texture
     glGenTextures(1, &pFb->tex1);
     glBindTexture(GL_TEXTURE_2D, pFb->tex1);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+} else {
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+}
 #else
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 #endif
@@ -425,7 +451,7 @@ void std3D_generateFramebuffer(int32_t width, int32_t height, std3DFramebuffer* 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-#if !defined(TARGET_LINUX_GLES)
+#if !defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1);
     glGenerateMipmap(GL_TEXTURE_2D);
 #else
@@ -441,8 +467,14 @@ void std3D_generateFramebuffer(int32_t width, int32_t height, std3DFramebuffer* 
         // Set up our position fb texture
         glGenTextures(1, &pFb->tex2);
         glBindTexture(GL_TEXTURE_2D, pFb->tex2);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+} else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+}
 #else
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 #endif
@@ -455,8 +487,14 @@ void std3D_generateFramebuffer(int32_t width, int32_t height, std3DFramebuffer* 
         // Set up our normal fb texture
         glGenTextures(1, &pFb->tex3);
         glBindTexture(GL_TEXTURE_2D, pFb->tex3);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+} else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+}
 #else
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 #endif
@@ -689,7 +727,7 @@ int init_resources()
     stdPlatform_Printf("std3D: OpenGL init...\n");
     openjkdf2_trace("init_resources: enter");
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     if (!std3D_EnsureGLContext()) {
         openjkdf2_trace("init_resources: no GL context");
         return false;
@@ -708,10 +746,19 @@ int init_resources()
     memset(std3D_aUITextures, 0, sizeof(std3D_aUITextures));
     openjkdf2_trace("init_resources: after memset");
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
     // KMSDRM/Mali: default framebuffer is 0; glGetIntegerv can crash on some drivers
     std3D_windowFbo = 0;
     openjkdf2_trace("init_resources: window fbo=0 (GLES)");
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+    // KMSDRM/Mali: default framebuffer is 0; glGetIntegerv can crash on some drivers
+    std3D_windowFbo = 0;
+    openjkdf2_trace("init_resources: window fbo=0 (GLES)");
+} else {
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &std3D_windowFbo);
+    openjkdf2_trace("init_resources: got window fbo");
+}
 #else
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &std3D_windowFbo);
     openjkdf2_trace("init_resources: got window fbo");
@@ -999,7 +1046,7 @@ void std3D_FreeResources()
         return;
     }
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     std3D_EnsureGLContext();
 #endif
 
@@ -1025,7 +1072,7 @@ void std3D_FreeResources()
         jkgm_aligned_free(worldpal_lights_data);
     if (displaypal_data)
         jkgm_aligned_free(displaypal_data);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     free(std3D_cutsceneRgbaCache);
     std3D_cutsceneRgbaCache = NULL;
     std3D_cutsceneRgbaCacheBytes = 0;
@@ -1064,7 +1111,7 @@ void std3D_FreeResources()
     std3D_worldIboCap = 0;
     std3D_menuVboCap = 0;
     std3D_menuIboCap = 0;
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     std3D_InvalidateGLContext();
 #endif
     std3D_bReinitHudElements = 1;
@@ -1083,7 +1130,7 @@ static void std3D_SyncDisplayPalette(int force)
     }
 }
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 static int std3D_glesUploadCutsceneMenuAsRgba(uint8_t *menuPixels, uint32_t width, uint32_t height, uint32_t rowStride)
 {
     size_t rgbaBytes;
@@ -1144,6 +1191,8 @@ static void std3D_glesEnsureMenuTexIndexed(uint8_t *menuPixels, uint32_t width, 
     glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     if (rowStride != width)
         glPixelStorei(GL_UNPACK_ROW_LENGTH, rowStride);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, menuPixels);
@@ -1179,7 +1228,7 @@ int std3D_StartScene()
 {
     if (Main_bHeadless) return 1;
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     std3D_EnsureGLContext();
 #endif
 
@@ -1338,7 +1387,7 @@ int std3D_EndScene()
     glDisableVertexAttribArray(attribute_v_color);
     glDisableVertexAttribArray(attribute_coord3d);
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     std3D_RunDeferredTexturePurge();
 #endif
 
@@ -1414,6 +1463,12 @@ void std3D_ComputeMenuRect(double winW, double winH, double *outX, double *outY,
         *outW = winW;
         *outH = winH;
     }
+}
+
+static int std3D_IsMenuPresentMode(void)
+{
+    return (jkGui_GdiMode || !jkGame_isDDraw)
+        && !jkGuiBuildMulti_bRendering && !jkCutscene_isRendering;
 }
 
 void std3D_DrawMenuSubrect(flex_t x, flex_t y, flex_t w, flex_t h, flex_t dstX, flex_t dstY, flex_t scale)
@@ -1573,7 +1628,7 @@ void std3D_DrawMenu()
 {
     if (Main_bHeadless) return;
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     stdDisplay_EnsureMenuGLTextures();
 #endif
     stdDisplay_SyncMenuBufferFormat();
@@ -1588,6 +1643,13 @@ void std3D_DrawMenu()
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDepthFunc(GL_ALWAYS);
     glUseProgram(programMenu);
+
+#if defined(SDL2_RENDER)
+    if (std3D_IsMenuPresentMode()) {
+        Window_ClearPresentSurface();
+        std3D_ResetUIRenderList();
+    }
+#endif
     
     float menu_w, menu_h, menu_u, menu_v, menu_x, menu_y;
     double menuRectX, menuRectY, menuRectW, menuRectH;
@@ -1599,15 +1661,13 @@ void std3D_DrawMenu()
     menu_y = 0.0;
     
     int bFixHudScale = 0;
+    int bMenuPresent = std3D_IsMenuPresentMode();
 
     double fake_windowW = (double)Window_xSize;
     double fake_windowH = (double)Window_ySize;
 
-    if (!jkGame_isDDraw && !jkGuiBuildMulti_bRendering && !jkCutscene_isRendering)
+    if (bMenuPresent)
     {
-        menu_u = 1.0;
-        menu_v = 1.0;
-
         std3D_ComputeMenuRect((double)Window_xSize, (double)Window_ySize, &menuRectX, &menuRectY, &menuRectW, &menuRectH);
         menu_x = (float)menuRectX;
         menu_y = (float)menuRectY;
@@ -1639,8 +1699,6 @@ void std3D_DrawMenu()
     }
     else
     {
-        bFixHudScale = 0;
-
         if (openjkdf2_IsHandheld()) {
             /* Stretch the 640x480 game/HUD buffer to the (possibly downscaled) window. */
             menu_w = (double)Window_xSize;
@@ -1648,12 +1706,17 @@ void std3D_DrawMenu()
             menu_u = 1.0;
             menu_v = 1.0;
         } else {
+#if defined(OPENJKDF2_RUNTIME_GL)
+            if (!openjkdf2_UseGLES() && jkGame_isDDraw) {
+                bFixHudScale = 1;
+            }
+#endif
             menu_w = Video_menuBuffer.format.width;
             menu_h = Video_menuBuffer.format.height;
         }
     }
 
-    if (!bFixHudScale)
+    if (!bFixHudScale && !bMenuPresent)
     {
         GL_tmpVertices[0].x = menu_x;
         GL_tmpVertices[0].y = menu_y;
@@ -1720,12 +1783,19 @@ void std3D_DrawMenu()
         /* Full 640x480 buffer (video centered in GLES jkCutscene) — same as menus. */
         std3D_DrawMenuSubrect(0, 0, 640, 480, menu_x, menu_y, menu_w / 640.0);
     }
+    else if (bMenuPresent)
+    {
+        GL_tmpVerticesAmt = 0;
+        GL_tmpTrisAmt = 0;
+
+        std3D_DrawMenuSubrect(0, 0, 640, 480, menu_x, menu_y, menu_w / 640.0);
+    }
     else
     {
         GL_tmpVerticesAmt = 0;
         GL_tmpTrisAmt = 0;
 
-#if !defined(TARGET_LINUX_GLES)
+#if !defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
         // Main View
         std3D_DrawMenuSubrect(0, 128, menu_w, menu_h-256, 0, 128, 0.0);
 
@@ -1750,6 +1820,33 @@ void std3D_DrawMenu()
 
         // Active forcepowers/items
         std3D_DrawMenuSubrect(menu_w - 48, 0, 48, 128, Window_xSize - (48*hudScale), 0, hudScale);
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (!openjkdf2_UseGLES() && jkGame_isDDraw) {
+        // Main View
+        std3D_DrawMenuSubrect(0, 128, menu_w, menu_h-256, 0, 128, 0.0);
+
+        float hudScale = Window_ySize / 480.0;
+
+        // Left and Right HUD
+        std3D_DrawMenuSubrect(0, menu_h - 64, 64, 64, 0, Window_ySize - 64*hudScale, hudScale);
+        std3D_DrawMenuSubrect(menu_w - 64, menu_h - 64, 64, 64, Window_xSize - 64*hudScale, Window_ySize - 64*hudScale, hudScale);
+
+        // Items (inventory is drawn via std3D_DrawUIBitmap on GLES)
+        std3D_DrawMenuSubrect((menu_w / 2) - 128, menu_h - 64, 256, 64, (Window_xSize / 2) - (128*hudScale), Window_ySize - 64*hudScale, hudScale);
+
+        // Text
+        float textScale = hudScale;
+        if (jkDev_BMFontHeight > 11) {
+            textScale *= 11.0 / (float)jkDev_BMFontHeight;
+        }
+        float textWidth = menu_w - (48*2);
+        float textHeight = jkDev_BMFontHeight * 5.5;
+        float destTextWidth = textWidth * textScale;
+        std3D_DrawMenuSubrect(48, 0, menu_w - (48*2), textHeight, (Window_xSize / 2) - (destTextWidth / 2), 0, textScale);
+
+        // Active forcepowers/items
+        std3D_DrawMenuSubrect(menu_w - 48, 0, 48, 128, Window_xSize - (48*hudScale), 0, hudScale);
+}
 #endif
     }
 
@@ -1773,7 +1870,7 @@ void std3D_DrawMenu()
         uint32_t menuStride = Video_menuBuffer.format.width_in_bytes;
         int menuIndexed = 1;
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
         std3D_SyncDisplayPalette(jkCutscene_isRendering);
         if (jkCutscene_isRendering && menuPixels && menuW && menuH) {
             if (std3D_glesUploadCutsceneMenuAsRgba(menuPixels, menuW, menuH, menuStride))
@@ -1787,9 +1884,7 @@ void std3D_DrawMenu()
             glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
         }
 #else
-#if !defined(TARGET_LINUX_GLES)
         if (std3D_menuBufferDirty)
-#endif
         if (menuIndexed && menuPixels) {
             glPixelStorei(GL_UNPACK_ROW_LENGTH, menuStride);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, menuW, menuH, GL_RED, GL_UNSIGNED_BYTE, menuPixels);
@@ -1874,7 +1969,7 @@ void std3D_DrawMenu()
     };
     
     glUniformMatrix4fv(programMenu_uniform_mvp, 1, GL_FALSE, d3dmat);
-#if defined(TARGET_LINUX_GLES)
+#if defined(SDL2_RENDER)
     Window_SetPresentViewport();
 #else
     glViewport(0, 0, width, height);
@@ -1896,17 +1991,16 @@ void std3D_DrawMenu()
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, menu_ibo_triangle);
     std3D_uploadBuffer(menu_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), menu_data_elements, &std3D_menuIboCap);
-
-    int tris_size = 0;  
-    glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &tris_size);
-    glDrawElements(GL_TRIANGLES, tris_size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
+    glDrawElements(GL_TRIANGLES, (GLsizei)(GL_tmpTrisAmt * 3), GL_UNSIGNED_SHORT, 0);
 
     glDisableVertexAttribArray(programMenu_attribute_v_uv);
     glDisableVertexAttribArray(programMenu_attribute_v_color);
     glDisableVertexAttribArray(programMenu_attribute_coord3d);
 
-    std3D_DrawMapOverlay();
-    std3D_DrawUIRenderList();
+    if (!bMenuPresent) {
+        std3D_DrawMapOverlay();
+        std3D_DrawUIRenderList();
+    }
 
     last_flags = 0;
 }
@@ -2017,7 +2111,7 @@ void std3D_DrawMapOverlay()
     };
     
     glUniformMatrix4fv(programMenu_uniform_mvp, 1, GL_FALSE, d3dmat);
-#if defined(TARGET_LINUX_GLES)
+#if defined(SDL2_RENDER)
     Window_SetPresentViewport();
 #else
     glViewport(0, 0, width, height);
@@ -2039,10 +2133,7 @@ void std3D_DrawMapOverlay()
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, menu_ibo_triangle);
     std3D_uploadBuffer(menu_ibo_triangle, GL_ELEMENT_ARRAY_BUFFER, GL_tmpTrisAmt * 3 * sizeof(GLushort), menu_data_elements, &std3D_menuIboCap);
-
-    int tris_size = 0;  
-    glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &tris_size);
-    glDrawElements(GL_TRIANGLES, tris_size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
+    glDrawElements(GL_TRIANGLES, (GLsizei)(GL_tmpTrisAmt * 3), GL_UNSIGNED_SHORT, 0);
 
     glDisableVertexAttribArray(programMenu_attribute_v_uv);
     glDisableVertexAttribArray(programMenu_attribute_v_color);
@@ -2329,7 +2420,10 @@ void std3D_DrawUIClearedRectRGBA(uint8_t color_r, uint8_t color_g, uint8_t color
 void std3D_DrawUIRenderList()
 {
     if (Main_bHeadless) return;
-    if (!GL_tmpUITrisAmt) return;
+    if (!GL_tmpUITrisAmt) {
+        std3D_ResetUIRenderList();
+        return;
+    }
 
     //glFlush();
 
@@ -2396,7 +2490,7 @@ void std3D_DrawUIRenderList()
     };
     
     glUniformMatrix4fv(std3D_uiProgram.uniform_mvp, 1, GL_FALSE, d3dmat);
-#if defined(TARGET_LINUX_GLES)
+#if defined(SDL2_RENDER)
     Window_SetPresentViewport();
 #else
     glViewport(0, 0, width, height);
@@ -2660,7 +2754,7 @@ void std3D_DrawSimpleTex(std3DSimpleTexStage* pStage, std3DIntermediateFbo* pFbo
     
     glUniformMatrix4fv(pStage->uniform_mvp, 1, GL_FALSE, d3dmat);
     if (pFbo->fbo == std3D_windowFbo) {
-#if defined(TARGET_LINUX_GLES)
+#if defined(SDL2_RENDER)
         Window_SetPresentViewport();
 #else
         glViewport(0, 0, width, height);
@@ -2776,11 +2870,15 @@ static void std3D_DrawSceneComposite(std3DIntermediateFbo *pFbo, GLuint albedoTe
             -((float)pFbo->w / 2.0f) * scaleX, ((float)pFbo->h / 2.0f) * scaleY, -1, 1
         };
         glUniformMatrix4fv(pStage->uniform_mvp, 1, GL_FALSE, d3dmat);
-#if defined(TARGET_LINUX_GLES)
-        Window_SetPresentViewport();
+        if (pFbo->fbo == std3D_windowFbo) {
+#if defined(SDL2_RENDER)
+            Window_SetPresentViewport();
 #else
-        glViewport(0, 0, pFbo->w, pFbo->h);
+            glViewport(0, 0, pFbo->w, pFbo->h);
 #endif
+        } else {
+            glViewport(0, 0, pFbo->w, pFbo->h);
+        }
         glUniform2f(pStage->uniform_iResolution, (float)pFbo->iw, (float)pFbo->ih);
         glUniform1i(pStage->uniform_tex, 0);
         glUniform1i(pStage->uniform_tex2, 1);
@@ -2838,8 +2936,11 @@ void std3D_DrawSceneFbo()
         draw_ssao = 0;
     }
 
-    if (!jkGame_isDDraw && !jkGuiBuildMulti_bRendering)
+    if (std3D_IsMenuPresentMode())
     {
+#if defined(SDL2_RENDER)
+        Window_ClearPresentSurface();
+#endif
         return;
     }
 
@@ -3460,7 +3561,7 @@ int std3D_ClearZBuffer()
     return 1;
 }
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 static int std3D_glesIsRgb565(stdVBuffer *vbuf)
 {
     return vbuf->format.format.r_bits == 5
@@ -3604,7 +3705,7 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
         texture->texture_id = 0;
     }
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     if (!has_initted) {
         openjkdf2_trace("std3D_AddToTextureCache: GL not initted yet");
         return 0;
@@ -3617,10 +3718,18 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
 
     if (std3D_loadedTexturesAmt >= STD3D_MAX_TEXTURES) {
         stdPlatform_Printf("ERROR: Texture cache exhausted!! Ask ShinyQuagsire to increase the size.\n");
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
         if (!std3D_GlesRecoverTextureCacheSlots()) {
             return 0;
         }
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+        if (!std3D_GlesRecoverTextureCacheSlots()) {
+            return 0;
+        }
+} else {
+        return 1;
+}
 #else
         return 1;
 #endif
@@ -3629,7 +3738,7 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
     
     GLuint image_texture = 0;
     glGenTextures(1, &image_texture);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     if (!image_texture) {
 #if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
         if (rdMaterial_PurgeMaterialCache())
@@ -3679,7 +3788,7 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
     if (vbuf->format.format.is16bit)
     {
         texture->is_16bit = 1;
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
         {
             void* image_data = NULL;
             int use_native = 0;
@@ -3693,13 +3802,13 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
             if (!use_native) {
                 image_data = std3D_glesConvert16bppToRgba8(vbuf, width, height, image_16bpp);
                 if (!image_data) {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
                     std3D_RequestDeferredTexturePurge();
 #endif
                     return 0;
                 }
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
                 if (!std3D_GlesCheckUploadError(&image_texture, "16bpp rgba upload")) {
                     free(image_data);
                     return 0;
@@ -3709,6 +3818,43 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
 
             texture->pDataDepthConverted = image_data;
         }
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+        {
+            void* image_data = NULL;
+            int use_native = 0;
+
+            if (std3D_glesIsRgb565(vbuf) && !vbuf->transparent_color) {
+                use_native = std3D_glesTryUpload16bppNative(vbuf, width, height, image_8bpp, 0);
+            } else if (is_alpha_tex || std3D_glesIsRgb1555(vbuf)) {
+                use_native = std3D_glesTryUpload16bppNative(vbuf, width, height, image_8bpp, 1);
+            }
+
+            if (!use_native) {
+                image_data = std3D_glesConvert16bppToRgba8(vbuf, width, height, image_16bpp);
+                if (!image_data) {
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
+                    std3D_RequestDeferredTexturePurge();
+#endif
+                    return 0;
+                }
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
+                if (!std3D_GlesCheckUploadError(&image_texture, "16bpp rgba upload")) {
+                    free(image_data);
+                    return 0;
+                }
+#endif
+            }
+
+            texture->pDataDepthConverted = image_data;
+        }
+} else {
+        if (!is_alpha_tex)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0,  GL_RGB, GL_UNSIGNED_SHORT_5_6_5_REV, image_8bpp);
+        else
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0,  GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, image_8bpp);
+}
 #else
         if (!is_alpha_tex)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0,  GL_RGB, GL_UNSIGNED_SHORT_5_6_5_REV, image_8bpp);
@@ -3818,14 +3964,14 @@ int std3D_AddToTextureCache(stdVBuffer *vbuf, rdDDrawSurface *texture, int is_al
         texture->pDataDepthConverted = image_data;
 #endif
         texture->is_16bit = 0;
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
         if (vbuf->format.width_in_bytes != width) {
             glPixelStorei(GL_UNPACK_ROW_LENGTH, vbuf->format.width_in_bytes);
         }
 #endif
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, image_8bpp);
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
         if (!std3D_GlesCheckUploadError(&image_texture, "8bpp upload")) {
             return 0;
         }
@@ -3877,7 +4023,7 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
 {
     if (Main_bHeadless) return 1;
     if (!has_initted) return 0;
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     if (!std3D_EnsureGLContext()) {
         openjkdf2_trace("std3D_AddBitmapToTextureCache: no GL context");
         return 0;
@@ -3893,7 +4039,7 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
     int cacheIdx = std3D_GetBitmapCacheIdx();
     if (cacheIdx < 0) {
         stdPlatform_Printf("ERROR: Texture cache exhausted!! Ask ShinyQuagsire to increase the size.\n");
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
         if (!std3D_GlesRecoverTextureCacheSlots()) {
             return 0;
         }
@@ -3901,6 +4047,18 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
         if (cacheIdx < 0) {
             return 0;
         }
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+        if (!std3D_GlesRecoverTextureCacheSlots()) {
+            return 0;
+        }
+        cacheIdx = std3D_GetBitmapCacheIdx();
+        if (cacheIdx < 0) {
+            return 0;
+        }
+} else {
+        return 1;
+}
 #else
         return 1;
 #endif
@@ -3948,17 +4106,17 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
     {
         texture->is_16bit = 1;
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
         {
             void* image_data = std3D_glesConvert16bppToRgba8(vbuf, width, height, image_16bpp);
             if (!image_data) {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
                 std3D_RequestDeferredTexturePurge();
 #endif
                 return 0;
             }
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
             if (!std3D_GlesCheckUploadError(&image_texture, "bitmap rgba upload")) {
                 free(image_data);
                 return 0;
@@ -3966,6 +4124,92 @@ int std3D_AddBitmapToTextureCache(stdBitmap *texture, int mipIdx, int is_alpha_t
 #endif
             texture->paDataDepthConverted[mipIdx] = image_data;
         }
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+        {
+            void* image_data = std3D_glesConvert16bppToRgba8(vbuf, width, height, image_16bpp);
+            if (!image_data) {
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
+                std3D_RequestDeferredTexturePurge();
+#endif
+                return 0;
+            }
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
+            if (!std3D_GlesCheckUploadError(&image_texture, "bitmap rgba upload")) {
+                free(image_data);
+                return 0;
+            }
+#endif
+            texture->paDataDepthConverted[mipIdx] = image_data;
+        }
+} else {
+        uint32_t tex_width, tex_height, tex_row_stride;
+        uint32_t row_stride = vbuf->format.width_in_bytes / 2;
+        tex_width = width;
+        tex_height = height;
+        tex_row_stride = width;
+
+        void* image_data = malloc(tex_width*tex_height*4);
+        memset(image_data, 0, tex_width*tex_height*4);
+
+        for (int j = 0; j < height; j++)
+        {
+            for (int i = 0; i < width; i++)
+            {
+                uint32_t index = (j*row_stride) + i;
+                uint32_t tex_index = (j*tex_row_stride) + i;
+                uint32_t val_rgba = 0x00000000;
+
+                uint16_t val = image_16bpp[index];
+                if (vbuf->format.format.r_bits == 5 && vbuf->format.format.g_bits == 6 && vbuf->format.format.b_bits == 5)
+                {
+                    uint8_t val_a8 = 0xFF;
+                    uint8_t val_r5 = (val >> 11) & 0x1F;
+                    uint8_t val_g6 = (val >> 5) & 0x3F;
+                    uint8_t val_b5 = (val >> 0) & 0x1F;
+                    uint8_t val_r8 = ( val_r5 * 527 + 23 ) >> 6;
+                    uint8_t val_g8 = ( val_g6 * 259 + 33 ) >> 6;
+                    uint8_t val_b8 = ( val_b5 * 527 + 23 ) >> 6;
+
+                    if (vbuf->transparent_color) {
+                        uint8_t transparent_r5 = (vbuf->transparent_color >> 11) & 0x1F;
+                        uint8_t transparent_g6 = (vbuf->transparent_color >> 5) & 0x3F;
+                        uint8_t transparent_b5 = (vbuf->transparent_color >> 0) & 0x1F;
+                        if (val_r5 == transparent_r5 && val_g6 == transparent_g6 && val_b5 == transparent_b5) {
+                            val_a8 = 0;
+                        }
+                    }
+
+                    val_rgba |= (val_a8 << 24);
+                    val_rgba |= (val_b8 << 16);
+                    val_rgba |= (val_g8 << 8);
+                    val_rgba |= (val_r8 << 0);
+                }
+                else if (vbuf->format.format.r_bits == 5 && vbuf->format.format.g_bits == 5 && vbuf->format.format.b_bits == 5)
+                {
+                    uint8_t val_a1 = (val >> 15);
+                    uint8_t val_r5 = (val >> 10) & 0x1F;
+                    uint8_t val_g5 = (val >> 5) & 0x1F;
+                    uint8_t val_b5 = (val >> 0) & 0x1F;
+                    uint8_t val_a8 = val_a1 ? 0xFF : 0x0;
+                    uint8_t val_r8 = ( val_r5 * 527 + 23 ) >> 6;
+                    uint8_t val_g8 = ( val_g5 * 527 + 23 ) >> 6;
+                    uint8_t val_b8 = ( val_b5 * 527 + 23 ) >> 6;
+
+                    val_rgba |= (val_a8 << 24);
+                    val_rgba |= (val_b8 << 16);
+                    val_rgba |= (val_g8 << 8);
+                    val_rgba |= (val_r8 << 0);
+                }
+
+                ((uint32_t*)image_data)[tex_index] = val_rgba;
+            }
+        }
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+        texture->paDataDepthConverted[mipIdx] = image_data;
+}
 #else
         uint32_t tex_width, tex_height, tex_row_stride;
         uint32_t row_stride = vbuf->format.width_in_bytes / 2;
@@ -4157,7 +4401,7 @@ void std3D_AddTextureToCacheList(rdDDrawSurface *surface) {
 // Added helpers
 void std3D_UpdateSettings()
 {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     if (!std3D_IsReady() || !std3D_EnsureGLContext())
         return;
 #endif
@@ -4409,7 +4653,7 @@ void std3D_PurgeEntireTextureCache()
         return;
     }
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     if (!has_initted || !std3D_EnsureGLContext()) {
         std3D_loadedTexturesAmt = 0;
         return;
@@ -4506,7 +4750,7 @@ int std3D_IsReady()
 
 void std3D_WarmupPipeline(int frames)
 {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     int i;
     int saved_ddraw;
 
@@ -4525,7 +4769,7 @@ void std3D_WarmupPipeline(int frames)
             break;
         std3D_DrawSceneFbo();
         std3D_EndScene();
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
         if (displayWindow)
             SDL_GL_SwapWindow(displayWindow);
 #endif

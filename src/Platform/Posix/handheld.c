@@ -1,4 +1,5 @@
 #include "Platform/handheld.h"
+#include "Platform/gl_backend.h"
 
 #include "types.h"
 #include "Main/Main.h"
@@ -124,8 +125,14 @@ static int openjkdf2_gles_warmup_enabled(void)
         return 0;
     if (toggle == 1)
         return 1;
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
     return openjkdf2_IsHandheld();
+#elif defined(OPENJKDF2_RUNTIME_GL)
+if (openjkdf2_UseGLES()) {
+    return openjkdf2_IsHandheld();
+} else {
+    return 0;
+}
 #else
     return 0;
 #endif

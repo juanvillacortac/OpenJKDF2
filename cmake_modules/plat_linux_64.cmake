@@ -1,4 +1,4 @@
-include(cmake_modules/target_linux_all.cmake)
+include(cmake_modules/target_linux_runtime_gl.cmake)
 
 macro(plat_initialize)
     message( STATUS "Targeting Linux 64-bit" )
@@ -7,6 +7,8 @@ macro(plat_initialize)
     add_definitions(-DARCH_64BIT)
     add_definitions(-D_XOPEN_SOURCE=500)
     add_definitions(-D_DEFAULT_SOURCE)
+    add_definitions(-DOPENJKDF2_RUNTIME_GL)
+    add_definitions(-DOPENJKDF2_RUNTIME_GL_DESKTOP)
 
     include(cmake_modules/plat_feat_full_sdl2.cmake)
 
@@ -19,6 +21,8 @@ macro(plat_initialize)
     endif()
 
     set(TARGET_LINUX TRUE)
+    set(OPENJKDF2_RUNTIME_GL TRUE)
+    set(OPENJKDF2_RUNTIME_GL_DESKTOP TRUE)
 
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -std=c11 -fshort-wchar -fno-builtin-wcslen -fno-builtin-wcslen -Werror=implicit-function-declaration -Wno-unused-variable -Wno-parentheses -Wno-incompatible-pointer-types")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fshort-wchar -fno-builtin-wcslen -fno-builtin-wcslen -Werror=implicit-function-declaration -Wno-unused-variable -Wno-parentheses ")

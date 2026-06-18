@@ -1,4 +1,4 @@
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 
 #include "Platform/trace_gles.h"
 

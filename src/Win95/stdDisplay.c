@@ -1,4 +1,5 @@
 #include "stdDisplay.h"
+#include "Platform/gl_backend.h"
 
 #include "stdPlatform.h"
 #include "jk.h"
@@ -36,7 +37,7 @@ uint8_t* stdDisplay_VBufferPixels(stdVBuffer *vbuf)
     return (uint8_t*)vbuf->surface_lock_alloc;
 }
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 static void stdDisplay_Free8bppBuffer(stdVBuffer *vbuf)
 {
     if (!vbuf) {
@@ -85,7 +86,7 @@ uint32_t Video_overlayTexId = 0;
 rdColor24 stdDisplay_masterPalette[256];
 int Video_bModeSet = 0;
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
 extern SDL_Window *displayWindow;
 extern SDL_GLContext glWindowContext;
 static int stdDisplay_menuTexturesValid = 0;
@@ -145,6 +146,8 @@ int stdDisplay_EnsureMenuGLTextures(void)
     glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, newW);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, newW, newH, 0, GL_RED, GL_UNSIGNED_BYTE, menuPixels);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
@@ -185,7 +188,9 @@ int stdDisplay_ResizeOverlayMapBuffer(uint32_t w, uint32_t h)
     stdDisplay_menuTexturesValid = 0;
     return 1;
 }
-#else
+#endif
+
+#if !defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
 int stdDisplay_EnsureMenuGLTextures(void)
 {
     return 1;
@@ -247,7 +252,7 @@ int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
 
     if (Video_bModeSet)
     {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
         stdDisplay_InvalidateMenuGLTextures();
         stdDisplay_Free8bppBuffer(&Video_otherBuf);
         stdDisplay_Free8bppBuffer(&Video_menuBuffer);
@@ -268,7 +273,7 @@ int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
 #endif
     }
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     openjkdf2_trace("stdDisplay_SetMode: alloc 8bpp buffers");
     if (!stdDisplay_Alloc8bppBuffer(&Video_otherBuf, newW, newH)
         || !stdDisplay_Alloc8bppBuffer(&Video_menuBuffer, newW, newH)
@@ -339,7 +344,7 @@ int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
     Video_otherBuf.format.format.bpp = 8;
     Video_overlayMapBuffer.format.format.bpp = 8;
 
-#if !defined(TARGET_LINUX_GLES)
+#if !defined(TARGET_LINUX_GLES) && !defined(OPENJKDF2_RUNTIME_GL)
     glGenTextures(1, &Video_menuTexId);
     glBindTexture(GL_TEXTURE_2D, Video_menuTexId);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -365,7 +370,7 @@ int stdDisplay_SetMode(unsigned int modeIdx, const void *palette, int paged)
 
 void stdDisplay_SyncMenuBufferFormat(void)
 {
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     /* Buffers 8bpp sin SDL_Surface; format ya viene de SetMode/Alloc8bppBuffer */
     (void)0;
 #else
@@ -414,7 +419,7 @@ stdVBuffer* stdDisplay_VBufferNew(stdVBufferTexFmt *fmt, int create_ddraw_surfac
     
     _memcpy(&out->format, fmt, sizeof(out->format));
 
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     if (fmt->format.bpp == 8) {
         if (!stdDisplay_Alloc8bppBuffer(out, fmt->width, fmt->height)) {
             std_pHS->free(out);
@@ -695,7 +700,7 @@ void stdDisplay_VBufferFree(stdVBuffer *vbuf)
         return;
     }
     stdDisplay_VBufferUnlock(vbuf);
-#if defined(TARGET_LINUX_GLES)
+#if defined(TARGET_LINUX_GLES) || defined(OPENJKDF2_RUNTIME_GL)
     stdDisplay_Free8bppBuffer(vbuf);
 #else
     if (vbuf->sdlSurface) {
