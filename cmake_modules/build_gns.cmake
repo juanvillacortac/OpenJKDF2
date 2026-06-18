@@ -12,6 +12,19 @@ if(TARGET_MACOS)
 elseif(TARGET_LINUX)
     set(GAMENETWORKINGSOCKETS_EXTRA_ARGS "-DLINUX:BOOL=TRUE")
     message(STATUS "Protobuf_ROOT=${Protobuf_ROOT}")
+    if(CMAKE_CROSSCOMPILING)
+        list(APPEND GAMENETWORKINGSOCKETS_EXTRA_ARGS
+            "-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH"
+            "-DProtobuf_DIR:PATH=${Protobuf_ROOT}/lib/cmake/protobuf"
+            "-DProtobuf_INCLUDE_DIR:PATH=${Protobuf_ROOT}/include"
+            "-DProtobuf_LIBRARY:FILEPATH=${Protobuf_ROOT}/lib/libprotobuf.a"
+        )
+        if(EXISTS "/usr/aarch64-openssl/lib/libcrypto.so")
+            list(APPEND GAMENETWORKINGSOCKETS_EXTRA_ARGS
+                "-DOPENSSL_ROOT_DIR:PATH=/usr/aarch64-openssl"
+            )
+        endif()
+    endif()
 else()
     set(GAMENETWORKINGSOCKETS_EXTRA_ARGS "")
 endif()
@@ -49,8 +62,6 @@ ExternalProject_Add(
                            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
                            ${GAMENETWORKINGSOCKETS_EXTRA_ARGS}
     DEPENDS                PROTOBUF ${GAMENETWORKINGSOCKETS_DEPENDS}
-    PATCH_COMMAND          git restore CMakeLists.txt src/CMakeLists.txt &&
-                           git apply -v ${CMAKE_SOURCE_DIR}/cmake_modules/GameNetworkingSockets_v1.4.1.patch
     BUILD_BYPRODUCTS       ${GameNetworkingSockets_SHARED_LIBRARY_PATH} ${GameNetworkingSockets_STATIC_LIBRARY_PATH} ${GameNetworkingSockets_IMPORT_LIBRARY_PATH}
 )
 

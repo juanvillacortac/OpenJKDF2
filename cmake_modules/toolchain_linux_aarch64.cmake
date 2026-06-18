@@ -9,7 +9,10 @@ set(CMAKE_RANLIB aarch64-linux-gnu-ranlib)
 # Do not set CMAKE_SYSROOT: Ubuntu/Debian cross linkers break when sysroot is
 # /usr/aarch64-linux-gnu (ld looks for $SYSROOT/usr/aarch64-linux-gnu/lib/...).
 # The compiler still resolves aarch64 libs/headers via CMAKE_FIND_ROOT_PATH.
-set(CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu)
+set(CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu /usr/aarch64-openssl)
+if(EXISTS "/usr/aarch64-openssl/lib/libcrypto.so")
+    set(OPENSSL_ROOT_DIR /usr/aarch64-openssl CACHE PATH "aarch64 OpenSSL for GNS cross-build")
+endif()
 
 # Evitar headers/librerías del host x86_64 durante el cross-compile
 set(CMAKE_IGNORE_PATH "/usr/include" "/usr/lib" "/usr/local/include" "/usr/local/lib")

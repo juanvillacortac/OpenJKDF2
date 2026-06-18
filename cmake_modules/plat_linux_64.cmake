@@ -13,10 +13,10 @@ macro(plat_initialize)
     include(cmake_modules/plat_feat_full_sdl2.cmake)
 
     if(DEFINED ENV{OPENJKDF2_PORTMASTER_BUILD})
-        message(STATUS "PortMaster x86_64: no GNS/curl/physfs (system OpenAL/SDL)")
+        message(STATUS "PortMaster x86_64: GNS multiplayer, no curl/physfs (system OpenAL/SDL)")
         set(TARGET_USE_PHYSFS FALSE)
         set(TARGET_USE_CURL FALSE)
-        set(TARGET_USE_GAMENETWORKINGSOCKETS FALSE)
+        set(TARGET_USE_GAMENETWORKINGSOCKETS TRUE)
         add_link_options(-static-libstdc++ -static-libgcc -Wl,-rpath,'$ORIGIN/libs.x86_64' -pthread)
     endif()
 

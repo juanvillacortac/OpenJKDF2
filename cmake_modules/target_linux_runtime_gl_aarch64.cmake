@@ -9,10 +9,20 @@ macro(plat_link_and_package)
         target_link_libraries(sith_engine PRIVATE PhysFS::PhysFS_s)
         target_link_libraries(${BIN_NAME} PRIVATE PhysFS::PhysFS_s)
     endif()
+    if(TARGET_USE_GAMENETWORKINGSOCKETS)
+        target_link_libraries(sith_engine PRIVATE GameNetworkingSockets::GameNetworkingSockets)
+    endif()
 
     target_link_libraries(sith_engine PRIVATE nlohmann_json::nlohmann_json)
     target_link_libraries(sith_engine PRIVATE dl pthread m)
 endmacro()
 
 macro(plat_extra_deps)
+    if(TARGET_USE_GAMENETWORKINGSOCKETS)
+        add_custom_command(
+            TARGET ${BIN_NAME}
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_BINARY_DIR}/GameNetworkingSockets/bin/libGameNetworkingSockets.so ${PROJECT_BINARY_DIR}
+        )
+    endif()
 endmacro()

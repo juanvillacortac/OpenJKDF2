@@ -16,6 +16,7 @@ cmake .. \
 
 make -j "$(nproc)" ZLIB_Linux_x86_64
 make -j "$(nproc)" LIBPNG SDL SDL_mixer GLEW
+(make -j "$(nproc)" PROTOBUF || make -j1 PROTOBUF)
 make -j "$(nproc)" openjkdf2
 
 popd

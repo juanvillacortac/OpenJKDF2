@@ -16,7 +16,10 @@ cmake .. \
 
 # Dependencias primero (evita carreras en cross-compile)
 make -j "$(nproc)" ZLIB_Linux_aarch64
+make -j "$(nproc)" ZLIB_HOST_Linux_x86_64
 make -j "$(nproc)" LIBPNG SDL SDL_mixer OPENAL
+(make -j "$(nproc)" PROTOBUF || make -j1 PROTOBUF)
+(make -j "$(nproc)" PROTOC || make -j1 PROTOC)
 make -j "$(nproc)" openjkdf2
 
 popd
