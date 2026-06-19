@@ -1007,12 +1007,13 @@ int my_kbhit() {
     static int initialized = 0;
 
     if (! initialized) {
-        // Use termios to turn off line buffering
-        struct termios term;
-        tcgetattr(STDIN, &term);
-        term.c_lflag &= ~ICANON;
-        term.c_lflag &= ~ECHO;
-        tcsetattr(STDIN, TCSANOW, &term);
+        if (isatty(STDIN)) {
+            struct termios term;
+            if (tcgetattr(STDIN, &term) == 0) {
+                term.c_lflag &= ~(ICANON | ECHO);
+                tcsetattr(STDIN, TCSANOW, &term);
+            }
+        }
         setbuf(stdin, NULL);
         initialized = 1;
     }
@@ -1024,11 +1025,24 @@ int my_kbhit() {
 #endif
 
 static char Window_headlessBuffer[256];
+static int Window_headlessPromptShown = 0;
+
+static void Window_HeadlessDrawPrompt(void)
+{
+    printf("\r> %s\033[K", Window_headlessBuffer);
+    fflush(stdout);
+}
 
 void Window_UpdateHeadless()
 {
     char buffer[32];
     size_t bytes_read = 0;
+    int inputChanged = 0;
+
+    if (!Window_headlessPromptShown) {
+        Window_HeadlessDrawPrompt();
+        Window_headlessPromptShown = 1;
+    }
 
     if (my_kbhit() > 0) {
 #if defined(WIN64_MINGW) || (_WIN32)
@@ -1047,11 +1061,12 @@ void Window_UpdateHeadless()
                 printf("\r> %s\n", Window_headlessBuffer);
                 sithConsole_TryCommand(Window_headlessBuffer);
                 memset(Window_headlessBuffer, 0, sizeof(Window_headlessBuffer));
+                inputChanged = 1;
                 continue;
             }
             else if (buffer[i] == 0x7F && strlen(Window_headlessBuffer)) {
                 Window_headlessBuffer[strlen(Window_headlessBuffer)-1] = 0;
-                printf("\r> %s ", Window_headlessBuffer);
+                inputChanged = 1;
                 continue;
             }
             else if (buffer[i] < ' ' || buffer[i] > '~')
@@ -1061,12 +1076,12 @@ void Window_UpdateHeadless()
 
             char tmp[2] = {buffer[i], 0};
             strncat(Window_headlessBuffer, tmp, 255);
+            inputChanged = 1;
         }
     }
-    
-    printf("\r> %s", Window_headlessBuffer);
-    //printf("> %x %x %s\n", buffer[0], my_kbhit(), Window_headlessBuffer);
-    fflush(stdout);
+
+    if (inputChanged)
+        Window_HeadlessDrawPrompt();
 
     if (Window_resized)
     {
