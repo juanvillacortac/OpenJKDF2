@@ -176,6 +176,7 @@ void jkGuiCheats_Show(void)
 
     jkGuiCheats_FreeEntries(&darray);
     jkGuiRend_DarrayFree(&darray);
+    jkGui_SetModeGame();
 }
 
 #else
