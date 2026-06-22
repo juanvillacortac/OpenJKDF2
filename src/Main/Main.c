@@ -577,6 +577,23 @@ void Main_ShowHelp()
     jk_exit(3);
 }
 
+void Main_ParseEarlyArgs(int argc, char **argv)
+{
+#ifdef QOL_IMPROVEMENTS
+    for (int i = 1; i < argc; i++) {
+        if (!__strcmpi(argv[i], "-headless") || !__strcmpi(argv[i], "/headless"))
+            Main_bHeadless = 1;
+        else if (!__strcmpi(argv[i], "-dedicatedServer") || !__strcmpi(argv[i], "/dedicatedServer"))
+            Main_bDedicatedServer = 1;
+        else if (!__strcmpi(argv[i], "-motsCompat") || !__strcmpi(argv[i], "/motsCompat"))
+            Main_bMotsCompat = 1;
+    }
+#else
+    (void)argc;
+    (void)argv;
+#endif
+}
+
 void Main_ParseCmdLine(char *cmdline)
 {
     for (char* pArgTok = _strtok(cmdline, " \t"); pArgTok; pArgTok = _strtok(0, " \t"))

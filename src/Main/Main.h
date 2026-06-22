@@ -21,6 +21,7 @@ extern int32_t Main_bEnhancedCogVerbs;
 int Main_Startup(const char *cmdline);
 void Main_Shutdown();
 void Main_ParseCmdLine(char *cmdline);
+void Main_ParseEarlyArgs(int argc, char **argv);
 int Main_FPrintf(const char* fmt, ...);
 
 #endif // _MAINMAIN_H

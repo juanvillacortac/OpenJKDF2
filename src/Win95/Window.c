@@ -1912,6 +1912,15 @@ static void Window_ConfigureAudioDriver(void)
 
 static int Window_InitSDL(void)
 {
+#ifdef QOL_IMPROVEMENTS
+    if (Main_bHeadless) {
+        if (SDL_Init(SDL_INIT_NOPARACHUTE) == 0)
+            return 0;
+        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        return -1;
+    }
+#endif
+
     Uint32 flags = SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_NOPARACHUTE | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO;
 
     Window_ConfigureAudioDriver();
@@ -1941,6 +1950,7 @@ int Window_Main_Linux(int argc, char** argv)
 
     // Init SDL
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
+    Main_ParseEarlyArgs(argc, argv);
 #if defined(TARGET_LINUX)
     openjkdf2_InitLinuxDisplayEnv();
 #endif

@@ -1,5 +1,6 @@
 #include "Platform/linux_display.h"
 
+#include "Main/Main.h"
 #include "SDL2_helper.h"
 
 #include <stdio.h>
@@ -47,6 +48,11 @@ static int openjkdf2_linux_drm_usable(void)
 void openjkdf2_InitLinuxDisplayEnv(void)
 {
 #if defined(TARGET_LINUX)
+#ifdef QOL_IMPROVEMENTS
+    if (Main_bHeadless)
+        return;
+#endif
+
     const char *video_env = getenv("SDL_VIDEODRIVER");
 
     openjkdf2_linux_kms_display = 0;
