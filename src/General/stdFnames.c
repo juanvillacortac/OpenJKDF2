@@ -226,7 +226,7 @@ static void stdFnames_NormalizeSlashes(char *path)
 
 static void stdFnames_ApplyCasepath(char *a1, int a2)
 {
-    char *r = (char*)malloc(strlen(a1) + 16);
+    char *r = (char*)malloc(CASEPATH_BUFSIZE);
 
     if (!r) {
         return;

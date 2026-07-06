@@ -350,10 +350,11 @@ int jkCutscene_sub_421310(char* fpath)
     stdMci_Stop();
 
 #ifdef LINUX
-    char *r = (char*)malloc(strlen(tmp) + 16);
-    if (casepath(tmp, r))
+    char *r = (char*)malloc(CASEPATH_BUFSIZE);
+    if (r && casepath(tmp, r))
     {
-        strcpy(tmp, r);
+        strncpy(tmp, r, sizeof(tmp) - 1);
+        tmp[sizeof(tmp) - 1] = '\0';
     }
     free((void*)r);
 #endif

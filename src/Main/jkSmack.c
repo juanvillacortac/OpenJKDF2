@@ -59,10 +59,11 @@ int jkSmack_SmackPlay(const char *fname)
     _sprintf(std_genBuffer, "video%c%s", LEC_PATH_SEPARATOR_CHR, fname);
 
 #ifdef FS_POSIX
-    char *r = (char*)malloc(strlen(std_genBuffer) + 16);
-    if (casepath(std_genBuffer, r))
+    char *r = (char*)malloc(CASEPATH_BUFSIZE);
+    if (r && casepath(std_genBuffer, r))
     {
-        strcpy(std_genBuffer, r);
+        strncpy(std_genBuffer, r, sizeof(std_genBuffer) - 1);
+        std_genBuffer[sizeof(std_genBuffer) - 1] = '\0';
     }
     free(r);
 #endif

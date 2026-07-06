@@ -158,10 +158,11 @@ for (int i = 0; i < strlen(tmp_filepath); i++)
 #endif
 
 #ifdef FS_POSIX
-    char *r = (char*)malloc(strlen(tmp_filepath) + 16);
-    if (casepath(tmp_filepath, r))
+    char *r = (char*)malloc(CASEPATH_BUFSIZE);
+    if (r && casepath(tmp_filepath, r))
     {
-        strcpy(tmp_filepath, r);
+        strncpy(tmp_filepath, r, sizeof(tmp_filepath) - 1);
+        tmp_filepath[sizeof(tmp_filepath) - 1] = '\0';
     }
     free(r);
 #endif

@@ -8,6 +8,15 @@
 #include <dirent.h>
 #include <errno.h>
 #include <unistd.h>
+#include <limits.h>
+
+#ifndef CASEPATH_BUFSIZE
+#if defined(PATH_MAX)
+#define CASEPATH_BUFSIZE PATH_MAX
+#else
+#define CASEPATH_BUFSIZE 4096
+#endif
+#endif
 
 static void casepath_norm_inplace(char *p)
 {
@@ -30,7 +39,7 @@ static void casepath_norm_inplace(char *p)
 
 static FILE *fcaseopen_resolved(const char *path, const char *mode)
 {
-    char *resolved = malloc(strlen(path) + 16);
+    char *resolved = malloc(CASEPATH_BUFSIZE);
     FILE *f = NULL;
 
     if (!resolved) {
@@ -84,7 +93,7 @@ static FILE *fcaseopen_try(const char *path, const char *mode)
     return NULL;
 }
 
-// r must have strlen(path) + 16 bytes
+// r must have at least CASEPATH_BUFSIZE bytes
 int casepath(char const *path, char *r)
 {
     size_t l = strlen(path);
@@ -129,7 +138,7 @@ int casepath(char const *path, char *r)
         char *slash = strchr(comp, '/');
         int is_last = (slash == NULL);
         struct dirent *e;
-        struct dirent *match = NULL;
+        size_t name_len;
 
         if (slash) {
             *slash = '\0';
@@ -148,25 +157,44 @@ int casepath(char const *path, char *r)
             return 0;
         }
 
+        if (rl + 1 >= CASEPATH_BUFSIZE) {
+            if (d) {
+                closedir(d);
+            }
+            return 0;
+        }
+
         r[rl] = '/';
         rl += 1;
         r[rl] = '\0';
 
-        for (e = readdir(d); e; e = readdir(d)) {
-            if (strcasecmp(comp, e->d_name) == 0) {
-                match = e;
-                break;
+        {
+            char matched_name[256];
+            int found = 0;
+
+            for (e = readdir(d); e; e = readdir(d)) {
+                if (strcasecmp(comp, e->d_name) == 0) {
+                    strncpy(matched_name, e->d_name, sizeof(matched_name) - 1);
+                    matched_name[sizeof(matched_name) - 1] = '\0';
+                    found = 1;
+                    break;
+                }
             }
-        }
-        closedir(d);
-        d = NULL;
+            closedir(d);
+            d = NULL;
 
-        if (!match) {
-            return 0;
-        }
+            if (!found) {
+                return 0;
+            }
 
-        strcpy(r + rl, match->d_name);
-        rl += strlen(match->d_name);
+            name_len = strlen(matched_name);
+            if (rl + name_len + 1 >= CASEPATH_BUFSIZE) {
+                return 0;
+            }
+
+            memcpy(r + rl, matched_name, name_len + 1);
+            rl += name_len;
+        }
 
         if (!is_last) {
             d = opendir(r);
@@ -206,8 +234,8 @@ FILE *fcaseopen(char const *path, char const *mode)
 void casechdir(char const *path)
 {
 #if !defined(_WIN32)
-    char *r = malloc(strlen(path) + 16);
-    if (casepath(path, r))
+    char *r = malloc(CASEPATH_BUFSIZE);
+    if (r && casepath(path, r))
     {
         chdir(r);
     }
@@ -215,8 +243,7 @@ void casechdir(char const *path)
     {
         errno = ENOENT;
     }
-    if (r)
-        free(r);
+    free(r);
 #else
     chdir(path);
 #endif

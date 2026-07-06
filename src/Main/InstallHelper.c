@@ -67,17 +67,19 @@ int InstallHelper_CopyFile(const char* pFolder, const char* pName)
     strncpy(tmpTo, pName, sizeof(tmpTo)-1);
 
 #ifdef LINUX
-    char *r = (char*)malloc(strlen(tmp) + 16);
-    if (casepath(tmp, r))
+    char *r = (char*)malloc(CASEPATH_BUFSIZE);
+    if (r && casepath(tmp, r))
     {
-        strcpy(tmp, r);
+        strncpy(tmp, r, sizeof(tmp) - 1);
+        tmp[sizeof(tmp) - 1] = '\0';
     }
     free(r);
 
-    r = (char*)malloc(strlen(tmpTo) + 16);
-    if (casepath(tmpTo, r))
+    r = (char*)malloc(CASEPATH_BUFSIZE);
+    if (r && casepath(tmpTo, r))
     {
-        strcpy(tmpTo, r);
+        strncpy(tmpTo, r, sizeof(tmpTo) - 1);
+        tmpTo[sizeof(tmpTo) - 1] = '\0';
     }
     free(r);
 #endif
@@ -159,17 +161,19 @@ int InstallHelper_CopyFileDisk(const char* pFolder, const char* pName)
     strncpy(tmpTo, pName, sizeof(tmpTo)-1);
 
 #ifdef LINUX
-    char *r = (char*)malloc(strlen(tmp) + 16);
-    if (casepath(tmp, r))
+    char *r = (char*)malloc(CASEPATH_BUFSIZE);
+    if (r && casepath(tmp, r))
     {
-        strcpy(tmp, r);
+        strncpy(tmp, r, sizeof(tmp) - 1);
+        tmp[sizeof(tmp) - 1] = '\0';
     }
     free(r);
 
-    r = (char*)malloc(strlen(tmpTo) + 16);
-    if (casepath(tmpTo, r))
+    r = (char*)malloc(CASEPATH_BUFSIZE);
+    if (r && casepath(tmpTo, r))
     {
-        strcpy(tmpTo, r);
+        strncpy(tmpTo, r, sizeof(tmpTo) - 1);
+        tmpTo[sizeof(tmpTo) - 1] = '\0';
     }
     free(r);
 #endif
@@ -257,7 +261,8 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
     char* data_home;
     if ((data_home = getenv(INSTALL_OVERRIDE_ENVVAR_NAME)) != NULL) {
 
-        strncpy(fname, data_home, 256);
+        strncpy(fname, data_home, sizeof(fname) - 1);
+        fname[sizeof(fname) - 1] = '\0';
 
         // Expand home directory
         if (data_home[0] == '~') {
@@ -350,7 +355,8 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
         if (!bFound) {
             data_home = SDL_GetPrefPath("OpenJKDF2", INSTALL_APPDATA_FOLDER_NAME);
             if (data_home) {
-                strncpy(fname, data_home, sizeof(fname));
+                strncpy(fname, data_home, sizeof(fname) - 1);
+                fname[sizeof(fname) - 1] = '\0';
                 stdFileUtil_MkDir(fname);
                 if (bChdir) {
                     casechdir(fname);
@@ -398,7 +404,8 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
         if (!bFound) {
             data_home = SDL_GetPrefPath("OpenJKDF2", INSTALL_APPDATA_FOLDER_NAME);
             if (data_home) {
-                strncpy(fname, data_home, sizeof(fname));
+                strncpy(fname, data_home, sizeof(fname) - 1);
+                fname[sizeof(fname) - 1] = '\0';
                 stdFileUtil_MkDir(fname);
                 if (bChdir) {
                     casechdir(fname);
@@ -412,7 +419,8 @@ int InstallHelper_GetLocalDataDir(char* pOut, size_t pOut_sz, int bChdir)
 #endif
 
     if (pOut && pOut_sz) {
-        strncpy(pOut, fname, pOut_sz);
+        strncpy(pOut, fname, pOut_sz - 1);
+        pOut[pOut_sz - 1] = '\0';
     }
     return bIsOverride;
 }

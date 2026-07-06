@@ -420,11 +420,12 @@ int stdFileUtil_FindNext(stdFileSearch *a1, stdFileSearchResult *a2)
 
 #ifndef TARGET_TWL
         {
-            char resolved[512];
-            if (casepath(tmp, resolved)) {
+            char *resolved = (char*)malloc(CASEPATH_BUFSIZE);
+            if (resolved && casepath(tmp, resolved)) {
                 strncpy(tmp, resolved, sizeof(tmp) - 1);
                 tmp[sizeof(tmp) - 1] = 0;
             }
+            free(resolved);
         }
 #endif
 
@@ -510,11 +511,17 @@ int stdFileUtil_DirExists(const char *path)
 {
     struct stat st;
 #if defined(PLATFORM_POSIX) && !defined(WIN32) && !defined(TARGET_TWL)
-    char resolved[512];
+    char *resolved = (char*)malloc(CASEPATH_BUFSIZE);
+    int exists = 0;
 
-    if (casepath(path, resolved)) {
-        return stat(resolved, &st) == 0 && S_ISDIR(st.st_mode);
+    if (resolved && casepath(path, resolved)) {
+        exists = stat(resolved, &st) == 0 && S_ISDIR(st.st_mode);
+    } else {
+        exists = stat(path, &st) == 0 && S_ISDIR(st.st_mode);
     }
+
+    free(resolved);
+    return exists;
 #endif
     return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
